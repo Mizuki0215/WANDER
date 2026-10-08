@@ -1,0 +1,44 @@
+{
+  // ⚠️⚠️ GitHub Codespaces 設定
+  //
+  //   為咩要呢個：**GitHub Pages 做唔到呢個 app**（見 DEPLOY.md），
+  //   但 GitHub **Codespaces** 做得到 —— 佢係一部真嘅 Linux VM，
+  //   跑得到 Python + FastAPI + SQLite，而且可以開公開 port。
+  //
+  //   免費額度：個人帳號 60 小時/月（2-core）
+  //
+  // ⚠️⚠️⚠️ 但 Codespaces 有兩個大問題：
+  //     ① 唔用嘅時候會**自動停**（預設 30 分鐘冇活動）
+  //        → 朋友撳落去會連唔到
+  //     ② 網址係 `xxx-8787.app.github.dev`，而且要設成 **public**
+  //        先俾外人入到
+  //
+  //   所以 Codespaces 適合「你自己試」，唔適合「畀朋友長期用」。
+  "name": "Wander",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" }
+  },
+
+  // ⚠️ 一次過裝齊前後端依賴
+  "postCreateCommand": "pip install -r server/requirements.txt && cd web && npm ci",
+
+  // ⚠️ 前端一定要 build 咗先 —— 後端會 serve `web/dist`
+  "postStartCommand": "cd web && npm run build",
+
+  "forwardPorts": [8787],
+  "portsAttributes": {
+    "8787": {
+      "label": "Wander",
+      "visibility": "public",
+      "onAutoForward": "notify"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python", "dbaeumer.vscode-eslint"]
+    }
+  }
+}

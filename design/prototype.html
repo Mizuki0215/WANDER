@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wander · Product Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0518;
+  --bg-2:#120a26;
+  --surface:#160d2e;
+  --surface-2:#1d1140;
+  --surface-3:#251757;
+  --border:#3a2570;
+  --border-hi:#7c3aed;
+  --neon:#a855f7;
+  --neon-2:#22d3ee;
+  --neon-3:#f472b6;
+  --text:#efeaff;
+  --dim:#9d8fc4;
+  --ok:#34d399;
+  --warn:#fbbf24;
+  --grad:linear-gradient(100deg,#a855f7,#22d3ee);
+  --grad-2:linear-gradient(100deg,#7c3aed,#f472b6);
+  --glow:0 0 18px rgba(168,85,247,.5);
+  --glow-2:0 0 14px rgba(34,211,238,.45);
+  --r:14px; --r-sm:9px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{
+  font-family:'Noto Sans TC',system-ui,sans-serif;
+  background:#070310;
+  background-image:
+    radial-gradient(ellipse 90% 55% at 50% -10%, rgba(124,58,237,.30), transparent 70%),
+    radial-gradient(ellipse 70% 45% at 10% 105%, rgba(34,211,238,.14), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 95% 80%, rgba(244,114,182,.12), transparent 70%);
+  min-height:100vh;color:var(--text);
+  display:flex;flex-direction:column;align-items:center;
+  padding:24px 14px 60px;gap:18px;
+}
+
+/* ═══ 外部說明 ═══ */
+.page-head{text-align:center;max-width:640px;margin-bottom:2px}
+.page-head h1{font-family:'Press Start 2P',monospace;font-size:13px;line-height:1.9;
+  background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.page-head p{color:var(--dim);font-size:12.5px;margin-top:10px;line-height:1.7}
+
+/* ═══ 手機外框 ═══ */
+.phone{
+  width:392px;max-width:100%;height:806px;
+  background:var(--bg);border-radius:38px;position:relative;
+  border:2px solid var(--border-hi);
+  box-shadow:0 0 0 3px rgba(124,58,237,.18), 0 0 44px rgba(124,58,237,.42), 0 30px 70px rgba(0,0,0,.75);
+  overflow:hidden;display:flex;flex-direction:column;
+}
+.notch{
+  position:absolute;top:9px;left:50%;transform:translateX(-50%);
+  width:104px;height:22px;background:#05020c;border-radius:14px;z-index:90;
+  border:1px solid rgba(124,58,237,.35);
+}
+.statusbar{
+  height:40px;flex:0 0 40px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 22px;font-size:11.5px;font-weight:700;color:var(--dim);z-index:80;
+  position:relative;
+}
+.statusbar .dots{display:flex;gap:4px;align-items:center}
+.statusbar .dots i{width:4px;height:4px;border-radius:50%;background:var(--neon);display:block;opacity:.8}
+
+/* scanline 質感 */
+.scan{
+  position:absolute;inset:0;pointer-events:none;z-index:70;opacity:.30;
+  background:repeating-linear-gradient(0deg, rgba(168,85,247,.055) 0 1px, transparent 1px 3px);
+}
+/* 星點 */
+.stars{position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.5}
+.stars i{position:absolute;background:#fff;border-radius:1px;display:block;
+  animation:tw 3.4s ease-in-out infinite}
+@keyframes tw{0%,100%{opacity:.18}50%{opacity:.95}}
+
+/* ═══ 畫面區 ═══ */
+.viewport{flex:1;position:relative;overflow:hidden;z-index:5}
+.screen{
+  position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;
+  padding:6px 16px 26px;display:none;scrollbar-width:none;
+  animation:fade .26s ease;
+}
+.screen::-webkit-scrollbar{display:none}
+.screen.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+
+/* ═══ 通用元件 ═══ */
+.h-title{font-size:21px;font-weight:900;letter-spacing:-.02em;margin:6px 0 2px}
+.h-sub{font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.6}
+.h-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pix{font-family:'Press Start 2P',monospace;font-size:9px;letter-spacing:.02em}
+
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:13px;position:relative;transition:all .2s;
+}
+.card.glow{border-color:var(--border-hi);box-shadow:var(--glow)}
+.card.tap{cursor:pointer}
+.card.tap:active{transform:scale(.985)}
+
+.btn{
+  font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;
+  padding:11px 16px;border-radius:var(--r-sm);border:1px solid var(--border-hi);
+  background:var(--surface-2);color:var(--text);transition:all .18s;
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--grad);border-color:transparent;color:#0b0518;
+  box-shadow:var(--glow);font-weight:900}
+.btn.ghost{background:transparent;border-color:var(--border);color:var(--dim)}
+.btn.wide{width:100%}
+.btn.sm{padding:7px 12px;font-size:11.5px}
+
+.input{
+  width:100%;font-family:inherit;font-size:13.5px;padding:13px 15px;
+  border-radius:var(--r-sm);border:1px solid var(--border);
+  background:var(--surface);color:var(--text);outline:none;transition:.18s;
+}
+.input::placeholder{color:var(--dim);opacity:.75}
+.input:focus{border-color:var(--neon);box-shadow:var(--glow)}
+
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:999px;
+  background:var(--surface-3);color:var(--dim);border:1px solid var(--border)}
+.chip.on{background:var(--grad);color:#0b0518;border-color:transparent}
+.chip.cat{background:transparent;color:var(--neon-2);border-color:rgba(34,211,238,.42)}
+
+.scroll-x{display:flex;gap:7px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none;margin:0 -16px;padding-left:16px;padding-right:16px}
+.scroll-x::-webkit-scrollbar{display:none}
+.scroll-x .chip{white-space:nowrap;cursor:pointer}
+
+.divider{height:1px;background:var(--border);margin:16px 0}
+.sec-label{font-size:11px;font-weight:900;letter-spacing:.14em;color:var(--neon-2);
+  text-transform:uppercase;margin:20px 0 10px;display:flex;align-items:center;gap:8px}
+.sec-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
+
+/* ═══ 1. 登入 ═══ */
+#s-login{display:none;padding:0}
+#s-login.active{display:flex;flex-direction:column;justify-content:center;padding:0 26px}
+.logo{text-align:center;margin-bottom:30px}
+.logo .mark{
+  width:74px;height:74px;margin:0 auto 18px;border-radius:20px;
+  background:var(--grad);display:flex;align-items:center;justify-content:center;
+  font-size:34px;box-shadow:0 0 34px rgba(168,85,247,.6);
+}
+.logo h2{font-family:'Press Start 2P',monospace;font-size:15px;line-height:1.7;
+  background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.logo p{color:var(--dim);font-size:12px;margin-top:12px}
+
+/* ═══ 2. Groups ═══ */
+.trip{
+  border-radius:var(--r);padding:15px;margin-bottom:11px;cursor:pointer;
+  position:relative;overflow:hidden;border:1px solid var(--border);
+  background:var(--surface);transition:all .2s;
+}
+.trip:active{transform:scale(.985)}
+.trip.feature{border-color:var(--border-hi);box-shadow:var(--glow)}
+.trip .cap{
+  position:absolute;inset:0;opacity:.32;
+  background:radial-gradient(circle at 82% 12%, var(--neon), transparent 58%),
+             radial-gradient(circle at 8% 92%, var(--neon-2), transparent 55%);
+}
+.trip .inner{position:relative;z-index:2}
+.trip h3{font-size:16.5px;font-weight:900;margin-bottom:5px}
+.trip .meta{font-size:11.5px;color:var(--dim);display:flex;gap:10px;flex-wrap:wrap}
+.trip .bar{height:3px;background:var(--surface-3);border-radius:99px;margin-top:12px;overflow:hidden}
+.trip .bar i{display:block;height:100%;background:var(--grad);border-radius:99px}
+.avatars{display:flex;margin-top:11px}
+.avatars span{
+  width:25px;height:25px;border-radius:50%;background:var(--surface-3);
+  border:1.5px solid var(--bg);display:flex;align-items:center;justify-content:center;
+  font-size:11px;margin-left:-7px;
+}
+.avatars span:first-child{margin-left:0}
+.avatars .more{background:var(--border-hi);font-size:9px;font-weight:900;color:#fff}
+
+/* ═══ 3. Discover ═══ */
+.paste{display:flex;gap:7px;margin-bottom:6px}
+.paste .input{flex:1}
+.parse{
+  margin-top:12px;border-radius:var(--r);padding:14px;
+  border:1px dashed var(--neon-2);background:rgba(34,211,238,.07);
+  display:none;
+}
+.parse.show{display:block;animation:fade .3s}
+.parse .steps{display:flex;flex-direction:column;gap:7px;font-size:11.5px;color:var(--dim)}
+.parse .steps div{display:flex;gap:8px;align-items:center}
+.parse .steps b{color:var(--neon-2);font-weight:700}
+
+.item{
+  display:flex;gap:11px;padding:11px;border-radius:var(--r-sm);
+  background:var(--surface);border:1px solid var(--border);margin-bottom:8px;
+  transition:all .2s;position:relative;
+}
+.item.low{border-style:dashed;border-color:var(--warn)}
+.item .ic{
+  width:48px;height:48px;flex:0 0 48px;border-radius:var(--r-sm);
+  background:linear-gradient(135deg,var(--surface-3),var(--surface-2));
+  display:flex;align-items:center;justify-content:center;font-size:22px;
+  border:1px solid var(--border);
+}
+.item .info{flex:1;min-width:0}
+.item .info h4{font-size:13.5px;font-weight:700;margin-bottom:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .info p{font-size:11px;color:var(--dim);line-height:1.5}
+.item .info .chips{margin-top:6px}
+.item .rate{
+  font-size:9.5px;font-weight:900;padding:3px 6px;border-radius:5px;
+  background:var(--surface-3);color:var(--neon-2);flex:0 0 auto;height:fit-content;
+}
+.item .rate.low{color:var(--warn)}
+
+/* ═══ 4. Map ═══ */
+.map{
+  height:326px;border-radius:var(--r);border:1px solid var(--border-hi);
+  position:relative;overflow:hidden;margin-bottom:12px;
+  background:
+    repeating-linear-gradient(0deg, rgba(124,58,237,.16) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(90deg, rgba(124,58,237,.16) 0 1px, transparent 1px 34px),
+    radial-gradient(circle at 50% 50%, #1c0f3d, #0d0620);
+  box-shadow:inset 0 0 60px rgba(0,0,0,.6);
+}
+.map .water{position:absolute;left:-10%;bottom:-14%;width:62%;height:52%;
+  background:linear-gradient(135deg,rgba(34,211,238,.22),rgba(34,211,238,.05));
+  border-radius:44% 56% 50% 50%;filter:blur(7px)}
+.pin{
+  position:absolute;transform:translate(-50%,-100%);cursor:pointer;
+  font-size:19px;transition:transform .2s;filter:drop-shadow(0 0 7px var(--neon));
+}
+.pin:hover,.pin.sel{transform:translate(-50%,-100%) scale(1.32)}
+.pin.sel::after{
+  content:attr(data-n);position:absolute;bottom:112%;left:50%;transform:translateX(-50%);
+  background:var(--grad);color:#0b0518;font-size:9.5px;font-weight:900;
+  padding:3px 8px;border-radius:99px;white-space:nowrap;
+}
+.map .ctrl{
+  position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px;
+}
+.map .ctrl button{
+  width:31px;height:31px;border-radius:8px;border:1px solid var(--border-hi);
+  background:rgba(11,5,24,.86);color:var(--text);font-size:15px;cursor:pointer;
+  backdrop-filter:blur(6px);
+}
+.map .hint{
+  position:absolute;left:10px;top:10px;font-size:10px;font-weight:700;
+  background:rgba(11,5,24,.82);border:1px solid var(--border);
+  padding:5px 9px;border-radius:99px;color:var(--dim);backdrop-filter:blur(6px);
+}
+
+/* ═══ 5. Plan ═══ */
+.days{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;margin:0 -16px 14px;
+  padding:0 16px 4px}
+.days::-webkit-scrollbar{display:none}
+.day{
+  flex:0 0 auto;min-width:64px;padding:9px 11px;border-radius:var(--r-sm);
+  border:1px solid var(--border);background:var(--surface);cursor:pointer;
+  text-align:center;transition:all .2s;
+}
+.day .dw{font-size:9.5px;color:var(--dim);font-weight:700}
+.day .dn{font-family:'Press Start 2P',monospace;font-size:11px;margin-top:5px}
+.day.on{background:var(--grad);border-color:transparent;box-shadow:var(--glow)}
+.day.on .dw,.day.on .dn{color:#0b0518}
+
+.tl{position:relative;padding-left:30px}
+.tl::before{
+  content:'';position:absolute;left:9px;top:6px;bottom:14px;width:2px;
+  background:linear-gradient(180deg,var(--neon),var(--neon-2),transparent);
+}
+.slot{position:relative;margin-bottom:9px}
+.slot .dot{
+  position:absolute;left:-25px;top:16px;width:9px;height:9px;border-radius:50%;
+  background:var(--neon);box-shadow:var(--glow);border:2px solid var(--bg);
+}
+.slot.empty .dot{background:var(--border);box-shadow:none}
+.stop{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:11px 12px;display:flex;gap:10px;align-items:center;cursor:grab;
+  transition:all .2s;
+}
+.stop:hover{border-color:var(--border-hi)}
+.stop:active{cursor:grabbing;opacity:.65}
+.stop .t{
+  font-family:'Press Start 2P',monospace;font-size:9px;color:var(--neon-2);
+  flex:0 0 42px;line-height:1.5;
+}
+.stop .d{flex:1;min-width:0}
+.stop .d h4{font-size:13px;font-weight:700;margin-bottom:2px}
+.stop .d p{font-size:10.5px;color:var(--dim)}
+.stop .grip{color:var(--border-hi);font-size:14px;letter-spacing:-2px}
+.slot.empty .stop{
+  border-style:dashed;background:transparent;justify-content:center;
+  color:var(--dim);font-size:11.5px;padding:15px;
+}
+.leg{
+  display:flex;gap:8px;align-items:center;padding:7px 11px;margin:0 0 9px 0;
+  font-size:10.5px;color:var(--neon-2);
+  background:rgba(34,211,238,.07);border-left:2px solid var(--neon-2);
+  border-radius:0 7px 7px 0;
+}
+.leg b{color:var(--text);font-weight:700}
+
+/* ═══ 6. Friends ═══ */
+.person{
+  display:flex;gap:11px;align-items:center;padding:11px;border-radius:var(--r-sm);
+  background:var(--surface);border:1px solid var(--border);margin-bottom:8px;
+}
+.person .av{
+  width:39px;height:39px;flex:0 0 39px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:17px;
+  background:linear-gradient(135deg,var(--surface-3),var(--surface-2));
+  border:1px solid var(--border-hi);
+}
+.person .n{flex:1}
+.person .n h4{font-size:13.5px;font-weight:700}
+.person .n p{font-size:11px;color:var(--dim);margin-top:2px}
+
+/* ═══ 底部 Nav ═══ */
+.nav{
+  flex:0 0 auto;display:flex;border-top:1px solid var(--border);
+  background:rgba(11,5,24,.94);backdrop-filter:blur(16px);z-index:85;
+  padding:8px 4px calc(8px + env(safe-area-inset-bottom));
+}
+.nav button{
+  flex:1;background:none;border:none;cursor:pointer;font-family:inherit;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  color:var(--dim);font-size:9.5px;font-weight:700;padding:5px 0;transition:.18s;
+}
+.nav button .i{font-size:18px;line-height:1;filter:grayscale(1) opacity(.55)}
+.nav button.on{color:var(--neon-2)}
+.nav button.on .i{filter:none;text-shadow:0 0 10px var(--neon-2)}
+.nav .add{flex:0 0 52px}
+.nav .add .i{
+  width:38px;height:38px;border-radius:50%;background:var(--grad);
+  display:flex;align-items:center;justify-content:center;font-size:20px;
+  color:#0b0518;box-shadow:var(--glow);filter:none;font-weight:900;
+}
+.nav .add span{color:var(--dim)}
+
+/* Toast */
+.toast{
+  position:absolute;left:50%;bottom:88px;transform:translate(-50%,16px);
+  background:var(--surface-2);border:1px solid var(--border-hi);
+  color:var(--text);font-size:12px;font-weight:600;padding:10px 17px;
+  border-radius:99px;box-shadow:var(--glow);opacity:0;pointer-events:none;
+  transition:all .3s;z-index:95;white-space:nowrap;max-width:88%;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media(max-width:430px){
+  body{padding:12px 0 30px}
+  .phone{width:100%;height:auto;min-height:calc(100vh - 40px);max-height:none;
+    border-radius:0;border-left:none;border-right:none}
+  .viewport{height:auto;min-height:640px}
+  .screen{position:relative}
+  .screen:not(.active){display:none}
+  .page-head{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>WANDER</h1>
+  <p>由 IG / 小紅書 link 一鍵變行程 · 互動 Prototype<br>
+  <span style="color:var(--neon-2)">撳底部導航切換畫面 · 全部可以撳</span></p>
+</div>
+
+<div class="phone">
+  <div class="notch"></div>
+  <div class="stars" id="stars"></div>
+  <div class="scan"></div>
+
+  <div class="statusbar">
+    <span id="clock">22:35</span>
+    <span class="dots"><i></i><i></i><i></i> 5G</span>
+  </div>
+
+  <div class="viewport">
+
+    <!-- ══════ 1. 登入 ══════ -->
+    <section class="screen" id="s-login">
+      <div class="logo">
+        <div class="mark">✦</div>
+        <h2>WANDER</h2>
+        <p>同朋友一齊計劃下一趟旅行</p>
+      </div>
+      <div class="card" style="border-color:var(--border-hi)">
+        <label style="font-size:11.5px;color:var(--dim);font-weight:700">Email</label>
+        <input class="input" id="email" type="email" value="you@example.com" style="margin:7px 0 12px">
+        <button class="btn primary wide" onclick="sendCode()">發送驗證碼</button>
+        <div id="otpWrap" style="display:none;margin-top:14px">
+          <label style="font-size:11.5px;color:var(--dim);font-weight:700">6 位驗證碼</label>
+          <input class="input" id="otp" type="text" inputmode="numeric" maxlength="6"
+                 placeholder="• • • • • •" value="824193"
+                 style="margin:7px 0 12px;letter-spacing:8px;font-weight:900;text-align:center">
+          <button class="btn primary wide" onclick="login()">登入 / 註冊</button>
+        </div>
+      </div>
+      <p style="text-align:center;color:var(--dim);font-size:10.5px;margin-top:16px;line-height:1.7">
+        冇密碼 · 只有 email 驗證碼<br>Supabase Auth 提供
+      </p>
+    </section>
+
+    <!-- ══════ 2. Groups ══════ -->
+    <section class="screen" id="s-groups">
+      <div class="h-row">
+        <div>
+          <div class="h-title">我嘅旅程</div>
+          <div class="h-sub" style="margin-bottom:0">3 個 group · 12 位朋友</div>
+        </div>
+        <button class="btn sm" onclick="toast('建立新 group')">＋ 新旅程</button>
+      </div>
+
+      <div style="height:14px"></div>
+
+      <div class="trip feature" onclick="go('discover')">
+        <div class="cap"></div>
+        <div class="inner">
+          <div class="h-row">
+            <h3>福岡 2027</h3>
+            <span class="pix" style="color:var(--neon-2)">活躍</span>
+          </div>
+          <div class="meta">
+            <span>📍 福岡 · 博多</span><span>📅 2027/08/12</span><span>⏳ 312 日</span>
+          </div>
+          <div class="bar"><i style="width:38%"></i></div>
+          <div class="h-row" style="margin-top:9px">
+            <div class="avatars">
+              <span>🦊</span><span>🐼</span><span>🐧</span><span>🐸</span>
+              <span class="more">+2</span>
+            </div>
+            <span style="font-size:11px;color:var(--dim)">24 個收藏</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="trip" onclick="go('discover')">
+        <div class="cap" style="background:radial-gradient(circle at 20% 20%, #f472b6, transparent 60%)"></div>
+        <div class="inner">
+          <div class="h-row"><h3>首爾吃喝團</h3><span class="pix" style="color:var(--dim)">計劃中</span></div>
+          <div class="meta"><span>📍 首爾</span><span>📅 2027/04/03</span><span>⏳ 181 日</span></div>
+          <div class="bar"><i style="width:12%"></i></div>
+          <div class="h-row" style="margin-top:9px">
+            <div class="avatars"><span>🦊</span><span>🐼</span><span class="more">+1</span></div>
+            <span style="font-size:11px;color:var(--dim)">7 個收藏</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="trip" onclick="go('discover')">
+        <div class="cap" style="background:radial-gradient(circle at 70% 80%, #22d3ee, transparent 60%)"></div>
+        <div class="inner">
+          <div class="h-row"><h3>台北 Weekend</h3><span class="pix" style="color:var(--dim)">草稿</span></div>
+          <div class="meta"><span>📍 台北</span><span>📅 未定</span></div>
+          <div class="bar"><i style="width:4%"></i></div>
+          <div class="h-row" style="margin-top:9px">
+            <div class="avatars"><span>🦊</span></div>
+            <span style="font-size:11px;color:var(--dim)">2 個收藏</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec-label">快速開始</div>
+      <div class="card tap" onclick="go('friends')" style="display:flex;gap:11px;align-items:center">
+        <span style="font-size:22px">👥</span>
+        <div style="flex:1">
+          <h4 style="font-size:13.5px;font-weight:700">邀請朋友入 group</h4>
+          <p style="font-size:11px;color:var(--dim);margin-top:2px">分享 invite link，一撳就加入</p>
+        </div>
+        <span style="color:var(--neon-2)">›</span>
+      </div>
+    </section>
+
+    <!-- ══════ 3. Discover ══════ -->
+    <section class="screen" id="s-discover">
+      <div class="h-title">加入收藏</div>
+      <div class="h-sub">貼 IG / 小紅書 / Google Maps link，自動解析分類</div>
+
+      <div class="paste">
+        <input class="input" id="linkInput" placeholder="https://instagram.com/p/…">
+        <button class="btn primary" onclick="parseLink()">解析</button>
+      </div>
+      <div style="font-size:10.5px;color:var(--dim);text-align:right">
+        試下撳「解析」睇效果
+      </div>
+
+      <div class="parse" id="parseBox">
+        <div class="pix" style="color:var(--neon-2);margin-bottom:11px">解析中…</div>
+        <div class="steps" id="parseSteps"></div>
+      </div>
+
+      <div class="scroll-x" style="margin-top:16px">
+        <button class="chip on" onclick="filter(this)">全部 24</button>
+        <button class="chip" onclick="filter(this)">🍜 美食 9</button>
+        <button class="chip" onclick="filter(this)">🛍 Shopping 7</button>
+        <button class="chip" onclick="filter(this)">🎡 玩 5</button>
+        <button class="chip" onclick="filter(this)">🏨 住宿 3</button>
+      </div>
+
+      <div class="sec-label">博多 · 4</div>
+      <div class="item">
+        <div class="ic">🍜</div>
+        <div class="info">
+          <h4>一蘭 本社總店</h4>
+          <p>24 小時營業 · 博多站行 5 分鐘</p>
+          <div class="chips"><span class="chip cat">美食</span><span class="chip">IG</span></div>
+        </div>
+        <span class="rate">98%</span>
+      </div>
+      <div class="item">
+        <div class="ic">🛍</div>
+        <div class="info">
+          <h4>博多運河城</h4>
+          <p>噴水 show · 行街食飯睇戲</p>
+          <div class="chips"><span class="chip cat">Shopping</span><span class="chip">Maps</span></div>
+        </div>
+        <span class="rate">100%</span>
+      </div>
+
+      <div class="sec-label">天神 · 3</div>
+      <div class="item low">
+        <div class="ic">🏮</div>
+        <div class="info">
+          <h4>屋台 天神エリア</h4>
+          <p>⚠️ 解析唔到店名，需要人手補</p>
+          <div class="chips"><span class="chip cat">美食</span><span class="chip">小紅書</span></div>
+        </div>
+        <span class="rate low">52%</span>
+      </div>
+      <div class="item">
+        <div class="ic">🛍</div>
+        <div class="info">
+          <h4>天神地下街</h4>
+          <p>直通地鐵 · 落雨救命</p>
+          <div class="chips"><span class="chip cat">Shopping</span><span class="chip">Maps</span></div>
+        </div>
+        <span class="rate">100%</span>
+      </div>
+
+      <div class="sec-label">中洲 · 2</div>
+      <div class="item">
+        <div class="ic">🏮</div>
+        <div class="info">
+          <h4>中洲屋台橫丁</h4>
+          <p>建議 8 點前去，唔係要排一個鐘</p>
+          <div class="chips"><span class="chip cat">美食</span><span class="chip">Maps</span></div>
+        </div>
+        <span class="rate">100%</span>
+      </div>
+
+      <div style="height:14px"></div>
+      <button class="btn primary wide" onclick="go('map')">去地圖揀地方 →</button>
+    </section>
+
+    <!-- ══════ 4. Map ══════ -->
+    <section class="screen" id="s-map">
+      <div class="h-title">地圖揀地方</div>
+      <div class="h-sub">撳 pin 揀想去嘅地方，再排入行程</div>
+
+      <div class="map">
+        <div class="water"></div>
+        <div class="hint">🗾 福岡 · 12 個收藏</div>
+        <div class="pin sel" style="left:34%;top:38%" data-n="一蘭總店 🍜" onclick="pickPin(this,'一蘭 本社總店')">🍜</div>
+        <div class="pin" style="left:56%;top:30%" data-n="博多運河城 🛍" onclick="pickPin(this,'博多運河城')">🛍</div>
+        <div class="pin" style="left:47%;top:58%" data-n="天神地下街 🛍" onclick="pickPin(this,'天神地下街')">🛍</div>
+        <div class="pin" style="left:24%;top:66%" data-n="中洲屋台 🏮" onclick="pickPin(this,'中洲屋台橫丁')">🏮</div>
+        <div class="pin" style="left:72%;top:48%" data-n="大濠公園 🎡" onclick="pickPin(this,'大濠公園')">🎡</div>
+        <div class="pin" style="left:84%;top:74%" data-n="太宰府 ⛩" onclick="pickPin(this,'太宰府天滿宮')">⛩</div>
+        <div class="ctrl">
+          <button onclick="toast('放大')">＋</button>
+          <button onclick="toast('縮細')">－</button>
+          <button onclick="toast('定位我')">◎</button>
+        </div>
+      </div>
+
+      <div class="card glow" style="margin-bottom:12px">
+        <div class="h-row">
+          <div>
+            <div style="font-size:10.5px;color:var(--dim);font-weight:700">已揀</div>
+            <h4 id="pickedName" style="font-size:14.5px;font-weight:900;margin-top:3px">一蘭 本社總店</h4>
+          </div>
+          <button class="btn sm primary" onclick="go('plan')">排入行程</button>
+        </div>
+        <div class="chips" style="margin-top:10px">
+          <span class="chip cat">🍜 美食</span><span class="chip">博多</span>
+          <span class="chip">⭐ 4.4</span><span class="chip">¥1,000–2,000</span>
+        </div>
+      </div>
+
+      <div class="sec-label">附近 · 按距離</div>
+      <div class="item">
+        <div class="ic">🏮</div>
+        <div class="info"><h4>中洲屋台橫丁</h4><p>步行 12 分鐘 · 1.0 km</p></div>
+        <span class="rate">4.5</span>
+      </div>
+      <div class="item">
+        <div class="ic">🛍</div>
+        <div class="info"><h4>天神地下街</h4><p>地鐵 6 分鐘 · 2.3 km</p></div>
+        <span class="rate">4.2</span>
+      </div>
+    </section>
+
+    <!-- ══════ 5. Plan ══════ -->
+    <section class="screen" id="s-plan">
+      <div class="h-row">
+        <div>
+          <div class="h-title">行程表</div>
+          <div class="h-sub" style="margin-bottom:0">拖動景點排入唔同日子</div>
+        </div>
+        <button class="btn sm" onclick="toast('AI 自動優化路線…')">✦ 優化</button>
+      </div>
+
+      <div style="height:12px"></div>
+
+      <div class="days">
+        <div class="day on" onclick="pickDay(this)"><div class="dw">WED</div><div class="dn">DAY 1</div></div>
+        <div class="day" onclick="pickDay(this)"><div class="dw">THU</div><div class="dn">DAY 2</div></div>
+        <div class="day" onclick="pickDay(this)"><div class="dw">FRI</div><div class="dn">DAY 3</div></div>
+        <div class="day" onclick="pickDay(this)"><div class="dw">SAT</div><div class="dn">DAY 4</div></div>
+        <div class="day" onclick="toast('加多一日')"><div class="dw">＋</div><div class="dn">加日</div></div>
+      </div>
+
+      <div class="tl">
+        <div class="slot">
+          <div class="dot"></div>
+          <div class="stop" draggable="true">
+            <span class="t">09:00</span>
+            <div class="d"><h4>🍜 一蘭 本社總店</h4><p>早餐 · 博多</p></div>
+            <span class="grip">⋮⋮</span>
+          </div>
+        </div>
+
+        <div class="leg">🚶 <b>行 5 分鐘</b> · 400m · 去下一個點</div>
+
+        <div class="slot">
+          <div class="dot"></div>
+          <div class="stop" draggable="true">
+            <span class="t">10:30</span>
+            <div class="d"><h4>🛍 博多運河城</h4><p>購物 · 睇噴水 show</p></div>
+            <span class="grip">⋮⋮</span>
+          </div>
+        </div>
+
+        <div class="leg">🚇 <b>地鐵 6 分鐘</b> · 2.3 km · 博多 → 天神</div>
+
+        <div class="slot">
+          <div class="dot"></div>
+          <div class="stop" draggable="true">
+            <span class="t">13:00</span>
+            <div class="d"><h4>🛍 天神地下街</h4><p>購物 · 午餐</p></div>
+            <span class="grip">⋮⋮</span>
+          </div>
+        </div>
+
+        <div class="leg">🚶 <b>行 12 分鐘</b> · 1.0 km · 去中洲</div>
+
+        <div class="slot">
+          <div class="dot"></div>
+          <div class="stop" draggable="true">
+            <span class="t">18:30</span>
+            <div class="d"><h4>🏮 中洲屋台橫丁</h4><p>晚餐 · 屋台</p></div>
+            <span class="grip">⋮⋮</span>
+          </div>
+        </div>
+
+        <div class="slot empty">
+          <div class="dot"></div>
+          <div class="stop">＋ 拖景點入嚟 / 撳一下加</div>
+        </div>
+      </div>
+
+      <div class="sec-label">未排入行程 · 6</div>
+      <div class="item">
+        <div class="ic">⛩</div>
+        <div class="info"><h4>太宰府天滿宮</h4><p>半日行程 · 西鐵 30 分鐘</p></div>
+        <span class="rate">5</span>
+      </div>
+      <div class="item">
+        <div class="ic">🎡</div>
+        <div class="info"><h4>大濠公園</h4><p>散步 · 附近有美術館</p></div>
+        <span class="rate">3</span>
+      </div>
+
+      <div class="card" style="margin-top:14px;border-color:var(--border-hi)">
+        <div class="h-row">
+          <div style="font-size:11.5px;color:var(--dim);font-weight:700">Day 1 總車程</div>
+          <div class="pix" style="color:var(--neon-2)">23 MIN</div>
+        </div>
+        <div style="font-size:10.5px;color:var(--dim);margin-top:7px">
+          ⚠️ 而家係估算。接駁 Google Routes API 之後會出真實班次同車費。
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════ 6. Friends ══════ -->
+    <section class="screen" id="s-friends">
+      <div class="h-title">朋友</div>
+      <div class="h-sub">加朋友，再邀請入唔同 group</div>
+
+      <div class="paste">
+        <input class="input" placeholder="@username 或者 email">
+        <button class="btn primary" onclick="toast('已送出邀請 ✓')">加</button>
+      </div>
+
+      <div class="card glow" style="margin:12px 0;display:flex;gap:11px;align-items:center">
+        <span style="font-size:20px">🔗</span>
+        <div style="flex:1">
+          <h4 style="font-size:12.5px;font-weight:700">福岡 2027 · 邀請 link</h4>
+          <p class="pix" style="font-size:8px;color:var(--dim);margin-top:5px">wander.app/j/9FK2XQ</p>
+        </div>
+        <button class="btn sm" onclick="toast('已複製 link ✓')">複製</button>
+      </div>
+
+      <div class="sec-label">喺「福岡 2027」 · 6</div>
+      <div class="person">
+        <div class="av">🦊</div>
+        <div class="n"><h4>你 (Owner)</h4><p>you@example.com</p></div>
+        <span class="chip on">Owner</span>
+      </div>
+      <div class="person">
+        <div class="av">🐼</div>
+        <div class="n"><h4>阿明</h4><p>24 個收藏 · 活躍</p></div>
+        <span class="chip">Member</span>
+      </div>
+      <div class="person">
+        <div class="av">🐧</div>
+        <div class="n"><h4>Ka Yan</h4><p>11 個收藏</p></div>
+        <span class="chip">Member</span>
+      </div>
+      <div class="person">
+        <div class="av">🐸</div>
+        <div class="n"><h4>Wing</h4><p>未確認邀請</p></div>
+        <span class="chip" style="color:var(--warn);border-color:var(--warn)">Pending</span>
+      </div>
+
+      <div class="sec-label">我嘅朋友 · 12</div>
+      <div class="person">
+        <div class="av">🐨</div>
+        <div class="n"><h4>Sam</h4><p>3 個共同 group</p></div>
+        <button class="btn sm ghost" onclick="toast('邀請入 group')">邀請</button>
+      </div>
+      <div class="person">
+        <div class="av">🦉</div>
+        <div class="n"><h4>家姐</h4><p>1 個共同 group</p></div>
+        <button class="btn sm ghost" onclick="toast('邀請入 group')">邀請</button>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <nav class="nav" id="nav">
+    <button data-s="groups" class="on" onclick="go('groups')"><span class="i">🗂</span>旅程</button>
+    <button data-s="discover" onclick="go('discover')"><span class="i">🔍</span>收藏</button>
+    <button class="add" data-s="discover" onclick="go('discover')"><span class="i">＋</span><span>加入</span></button>
+    <button data-s="plan" onclick="go('plan')"><span class="i">🗓</span>行程</button>
+    <button data-s="friends" onclick="go('friends')"><span class="i">👥</span>朋友</button>
+  </nav>
+</div>
+
+<script>
+/* ── 星空 ── */
+(function(){
+  const box = document.getElementById('stars');
+  for(let i=0;i<58;i++){
+    const s=document.createElement('i');
+    const sz = Math.random()<.16 ? 2 : 1;
+    s.style.cssText = `left:${Math.random()*100}%;top:${Math.random()*100}%;
+      width:${sz}px;height:${sz}px;
+      background:${['#fff','#c4b5fd','#67e8f9','#f9a8d4'][i%4]};
+      animation-delay:${(Math.random()*3.4).toFixed(2)}s;
+      animation-duration:${(2.4+Math.random()*2.6).toFixed(2)}s`;
+    box.appendChild(s);
+  }
+})();
+
+/* ── 導航 ── */
+const SCREENS=['groups','discover','map','plan','friends'];
+function go(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  const el=document.getElementById('s-'+name);
+  if(el) el.classList.add('active');
+  document.querySelectorAll('#nav button').forEach(b=>
+    b.classList.toggle('on', b.dataset.s===name && !b.classList.contains('add')));
+  const vp=document.querySelector('.viewport');
+  if(vp) vp.scrollTop=0;
+}
+function show(name){ go(name); document.querySelector('.nav').style.display='none'; }
+function hideNav(show){
+  document.querySelector('.nav').style.display = show ? 'flex' : 'none';
+}
+
+/* ── Toast ── */
+let toastT;
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastT);
+  toastT=setTimeout(()=>t.classList.remove('show'),1700);
+}
+
+/* ── 登入流程 ── */
+function sendCode(){
+  document.getElementById('otpWrap').style.display='block';
+  toast('驗證碼已寄出 ✓（示範：824193）');
+}
+function login(){
+  toast('登入成功 ✓');
+  setTimeout(()=>{ hideNav(true); go('groups');},420);
+}
+
+/* ── 解析引擎示範 ── */
+const STEPS=[
+  '① 抽取 URL 類型… <b>Instagram Post</b>',
+  '② 抓取 og:image / og:title… <b>成功</b>',
+  '③ Caption 抽取 →「博多 一蘭 本店 24小時」',
+  '④ 地名比對：博多 <b>命中</b> · 天神 <b>未中</b>',
+  '⑤ 分類：拉麵 / 豚骨 → <b>🍜 美食</b>',
+  '⑥ 信心分數 <b>98%</b> → 自動歸入「博多 › 美食」',
+];
+function parseLink(){
+  const box=document.getElementById('parseBox');
+  const list=document.getElementById('parseSteps');
+  box.classList.add('show'); list.innerHTML='';
+  STEPS.forEach((s,i)=>{
+    setTimeout(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=`<span style="color:var(--neon)">▸</span> ${s}`;
+      list.appendChild(d);
+      if(i===STEPS.length-1){
+        setTimeout(()=>{
+          list.innerHTML+=`<div style="margin-top:10px;padding-top:10px;
+            border-top:1px solid var(--border);color:var(--ok);font-weight:700">
+            ✓ 已加入「福岡 2027 › 博多 › 美食」</div>`;
+          toast('已加入收藏 ✓');
+        },330);
+      }
+    }, i*430);
+  });
+}
+
+/* ── 互動 ── */
+function filter(b){
+  b.parentElement.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+  b.classList.add('on');
+}
+function pickDay(b){
+  b.parentElement.querySelectorAll('.day').forEach(d=>d.classList.remove('on'));
+  b.classList.add('on');
+}
+function pickPin(el,name){
+  document.querySelectorAll('.pin').forEach(p=>p.classList.remove('sel'));
+  el.classList.add('sel');
+  document.getElementById('pickedName').textContent=name;
+  toast('已揀：'+name);
+}
+
+/* ── 時鐘 ── */
+(function tick(){
+  const d=new Date();
+  const p=n=>String(n).padStart(2,'0');
+  const c=document.getElementById('clock');
+  if(c) c.textContent = p(d.getHours())+':'+p(d.getMinutes());
+  setTimeout(tick,20000);
+})();
+
+/* ── 初始化：由登入開始 ── */
+show('login');
+</script>
+</body>
+</html>

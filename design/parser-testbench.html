@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wander · 解析引擎測試台</title>
+<style>
+:root{
+  --bg:#070310; --panel:#0f0722; --panel-2:#160d2e; --panel-3:#1d1140;
+  --border:#33215f; --border-hi:#7c3aed;
+  --neon:#a855f7; --cyan:#22d3ee; --pink:#f472b6;
+  --text:#ece7ff; --dim:#9486bd;
+  --ok:#34d399; --warn:#fbbf24; --bad:#f87171;
+  --grad:linear-gradient(100deg,#a855f7,#22d3ee);
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --sans:'Noto Sans TC',-apple-system,system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:var(--sans);background:var(--bg);color:var(--text);
+  min-height:100vh;padding:26px 18px 70px;line-height:1.6;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -8%, rgba(124,58,237,.26), transparent 72%),
+    radial-gradient(ellipse 60% 40% at 92% 96%, rgba(34,211,238,.11), transparent 70%);
+}
+.wrap{max-width:1020px;margin:0 auto}
+
+/* head */
+.head{margin-bottom:24px}
+.head h1{
+  font:700 22px/1.4 var(--sans);letter-spacing:-.02em;
+  background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.head p{color:var(--dim);font-size:13px;margin-top:8px}
+.head .tag{
+  display:inline-block;font:700 10px/1 var(--mono);letter-spacing:.1em;
+  color:var(--cyan);border:1px solid rgba(34,211,238,.4);border-radius:99px;
+  padding:5px 11px;margin-bottom:12px;text-transform:uppercase;
+}
+
+/* 輸入 */
+.bar{display:flex;gap:9px;margin-bottom:10px}
+input.url{
+  flex:1;font-family:var(--mono);font-size:13px;padding:14px 16px;
+  border-radius:11px;border:1px solid var(--border);background:var(--panel);
+  color:var(--text);outline:none;transition:.18s;min-width:0;
+}
+input.url:focus{border-color:var(--neon);box-shadow:0 0 16px rgba(168,85,247,.45)}
+input.url::placeholder{color:#6b5c96}
+button.go{
+  font-family:var(--sans);font-weight:800;font-size:13.5px;cursor:pointer;
+  padding:14px 24px;border-radius:11px;border:none;background:var(--grad);
+  color:#0b0518;box-shadow:0 0 18px rgba(168,85,247,.45);transition:.18s;flex:0 0 auto;
+}
+button.go:active{transform:scale(.97)}
+
+.examples{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:22px}
+.ex{
+  font-family:var(--mono);font-size:11px;padding:7px 12px;border-radius:99px;
+  border:1px solid var(--border);background:var(--panel);color:var(--dim);
+  cursor:pointer;transition:.18s;
+}
+.ex:hover{border-color:var(--border-hi);color:var(--text)}
+.ex b{color:var(--cyan);font-weight:700}
+
+/* 結果 */
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+@media(max-width:820px){.cols{grid-template-columns:1fr}}
+
+.card{
+  background:var(--panel);border:1px solid var(--border);border-radius:14px;
+  overflow:hidden;
+}
+.card.glow{border-color:var(--border-hi);box-shadow:0 0 26px rgba(124,58,237,.28)}
+.card-h{
+  padding:13px 16px;border-bottom:1px solid var(--border);background:var(--panel-2);
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+}
+.card-h h2{font-size:12.5px;font-weight:800;letter-spacing:.03em}
+.card-h .badge{
+  font-family:var(--mono);font-size:10px;font-weight:700;padding:4px 9px;
+  border-radius:99px;background:var(--panel-3);color:var(--dim);border:1px solid var(--border);
+}
+.card-b{padding:16px}
+
+/* 步驟 */
+.step{
+  display:flex;gap:11px;padding:10px 0;border-bottom:1px dashed rgba(51,33,95,.7);
+  font-size:12.5px;animation:slide .3s ease both;
+}
+.step:last-child{border-bottom:none}
+@keyframes slide{from{opacity:0;transform:translateX(-9px)}to{opacity:1;transform:none}}
+.step .n{
+  flex:0 0 21px;height:21px;border-radius:6px;background:var(--panel-3);
+  border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:10px;font-weight:700;color:var(--cyan);
+}
+.step .t{flex:1;min-width:0}
+.step .t .lbl{color:var(--dim);font-size:11.5px;display:block;margin-bottom:2px}
+.step .t .val{font-family:var(--mono);font-size:12px;word-break:break-all;color:var(--text)}
+.step .t .val.hit{color:var(--ok)}
+.step .t .val.miss{color:var(--bad)}
+.step .t .val.part{color:var(--warn)}
+.step .st{flex:0 0 auto;font-family:var(--mono);font-size:10px;font-weight:700;padding:3px 7px;
+  border-radius:5px;height:fit-content}
+.st.ok{background:rgba(52,211,153,.15);color:var(--ok)}
+.st.no{background:rgba(248,113,113,.15);color:var(--bad)}
+.st.mid{background:rgba(251,191,36,.15);color:var(--warn)}
+.st.idle{background:var(--panel-3);color:var(--dim)}
+
+/* 輸出 JSON */
+pre.out{
+  font-family:var(--mono);font-size:11.5px;line-height:1.75;
+  background:#05020c;border:1px solid var(--border);border-radius:11px;
+  padding:15px;overflow-x:auto;white-space:pre;
+}
+.k{color:var(--pink)} .s{color:var(--ok)} .num{color:var(--cyan)}
+.nul{color:#6b5c96;font-style:italic} .cm{color:#5b4b85}
+
+/* 計分 */
+.score{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.sc{
+  flex:1;min-width:120px;background:var(--panel-2);border:1px solid var(--border);
+  border-radius:11px;padding:12px;
+}
+.sc .lb{font-size:10.5px;color:var(--dim);font-weight:700;letter-spacing:.06em}
+.sc .vv{font-family:var(--mono);font-size:19px;font-weight:700;margin-top:5px}
+.sc.hi .vv{color:var(--ok)} .sc.md .vv{color:var(--warn)} .sc.lo .vv{color:var(--bad)}
+
+/* 矩陣表 */
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--border)}
+th{font-size:10.5px;color:var(--cyan);font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+td{color:var(--dim);font-size:11.5px}
+td b{color:var(--text);font-weight:700}
+.yes{color:var(--ok);font-weight:800;font-family:var(--mono);font-size:11px}
+.no{color:var(--bad);font-weight:800;font-family:var(--mono);font-size:11px}
+.maybe{color:var(--warn);font-weight:800;font-family:var(--mono);font-size:11px}
+
+.note{
+  margin-top:22px;padding:15px;border:1px dashed var(--border-hi);border-radius:12px;
+  font-size:12.5px;color:var(--dim);line-height:1.85;
+}
+.note b{color:var(--text)}
+.note code{font-family:var(--mono);font-size:11.5px;background:var(--panel-3);
+  color:var(--cyan);padding:2px 6px;border-radius:4px}
+.foot{margin-top:26px;text-align:center;font-size:11px;color:#5b4b85;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <div class="tag">Parser Testbench v0.1</div>
+    <h1>解析引擎測試台 · 通用 Link Pipeline</h1>
+    <p>貼任何 link 落去，睇下實際可以抽到啲乜。呢個係 <b>P3 嘅規格文檔</b>，確認咗之後我就照住寫真嘅 Python 引擎。</p>
+  </div>
+
+  <div class="bar">
+    <input class="url" id="u" placeholder="貼 Google Maps / IG / 小紅書 / 任何網站 link…" autocomplete="off">
+    <button class="go" onclick="run()">解析</button>
+  </div>
+
+  <div class="examples" id="ex"></div>
+
+  <div class="cols">
+    <div class="card">
+      <div class="card-h">
+        <h2>▸ 解析步驟</h2>
+        <span class="badge" id="srcBadge">等待輸入</span>
+      </div>
+      <div class="card-b" id="steps">
+        <p style="color:var(--dim);font-size:12.5px">撳上面是但一個範例，或者貼你自己嘅 link。</p>
+      </div>
+    </div>
+
+    <div class="card glow">
+      <div class="card-h">
+        <h2>▸ 標準化輸出</h2>
+        <span class="badge" id="confBadge">confidence —</span>
+      </div>
+      <div class="card-b">
+        <pre class="out" id="out">// 解析後嘅 item 物件會長呢個樣</pre>
+        <div class="score">
+          <div class="sc" id="scPlace"><div class="lb">地名</div><div class="vv">—</div></div>
+          <div class="sc" id="scLoc"><div class="lb">位置／地區</div><div class="vv">—</div></div>
+          <div class="sc" id="scCat"><div class="lb">分類</div><div class="vv">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-h"><h2>▸ 各來源可抽到嘅資料（決定 App 點設計）</h2></div>
+    <div class="card-b" style="padding-top:6px">
+      <table>
+        <thead>
+          <tr><th>來源</th><th>店名</th><th>地址／地區</th><th>座標</th><th>圖片</th><th>內文</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><b>Google Maps</b></td><td class="yes">✓ 準</td><td class="yes">✓ 準</td><td class="yes">✓ 精確</td><td class="no">✗</td><td class="no">✗</td></tr>
+          <tr><td><b>普通網站</b>（推介文）</td><td class="yes">✓ 準</td><td class="maybe">~ 睇 JSON-LD</td><td class="no">✗</td><td class="yes">✓ og:image</td><td class="yes">✓ 摘要</td></tr>
+          <tr><td><b>Instagram</b></td><td class="maybe">~ 喺 caption</td><td class="maybe">~ 要解析文字</td><td class="no">✗</td><td class="yes">✓ og:image</td><td class="yes">✓ caption</td></tr>
+          <tr><td><b>小紅書</b></td><td class="no">✗ 反爬</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
+          <tr><td><b>YouTube / TikTok</b></td><td class="maybe">~ 標題</td><td class="maybe">~ 睇描述</td><td class="no">✗</td><td class="yes">✓ 縮圖</td><td class="yes">✓ 描述</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>呢個測試台示範咗 3 個關鍵設計：</b><br><br>
+    ① <b>先分類，後抽取</b> —— 唔同 link 用唔同 extractor，全部都輸出<b>同一個格式</b>。咁你 App 只需要識一種 item 物件，加新來源唔會改到 UI。<br>
+    ② <b>信心分數</b> —— Google Maps 攞到 100%，IG 靠文字猜，小紅書 0%。低過 70% 就會用虛線框提示用戶人手補。<br>
+    ③ <b>合併策略</b> —— Google Maps 拎座標 + IG 拎圖片，兩條 link 可以<b>自動合併成一個 item</b>。呢個係你嘅獨門功能，同行好少有。<br><br>
+    ⚠️ 注意：呢個網頁係喺你瀏覽器<b>即時解析 URL 結構</b>（真嘅）。真正抓取網頁內容（caption、og:image）要喺後端做，因為瀏覽器有 CORS 限制。貼真實 link 時，Google Maps 嘅解析結果係<b>準確嘅</b>；其他來源會顯示「需要後端」。
+  </div>
+
+  <div class="foot">Wander · 免費版 · P3 規格確認稿</div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════
+   CLASSIFIER  ──  先認 link 種類
+   ══════════════════════════════════════════════════════ */
+function classify(u){
+  let h;
+  try{ h = new URL(u).hostname.replace(/^www\./,'').toLowerCase(); }
+  catch(e){ return {id:'invalid', name:'無法識別', color:'--bad'}; }
+
+  if(/^(maps\.app\.goo\.gl|goo\.gl|maps\.google\.|google\.[a-z.]+)$/.test(h))
+    return {id:'gmaps', name:'Google Maps', host:h};
+  if(/instagram\.com$/.test(h))            return {id:'ig',     name:'Instagram',   host:h};
+  if(/(xiaohongshu\.com|xhslink\.com)$/.test(h)) return {id:'xhs', name:'小紅書', host:h};
+  if(/(youtube\.com|youtu\.be)$/.test(h))  return {id:'yt',     name:'YouTube',     host:h};
+  if(/tiktok\.com$/.test(h))               return {id:'tt',     name:'TikTok',      host:h};
+  if(/tabelog\.com$/.test(h))              return {id:'tabelog',name:'Tabelog',     host:h};
+  if(/tripadvisor\./.test(h))              return {id:'ta',     name:'TripAdvisor', host:h};
+  return {id:'web', name:'一般網站', host:h};
+}
+
+/* ══════════════════════════════════════════════════════
+   GMAPS EXTRACTOR  ──  呢個係真嘅解析邏輯，唔係假嘢
+   Google Maps link 有 5 種格式，全部都要識
+   ══════════════════════════════════════════════════════ */
+function extractGmaps(raw){
+  const steps=[], data={};
+  const decoded = (()=>{ try{ return decodeURIComponent(raw); }catch(e){ return raw; } })();
+
+  // ① 短連結
+  const isShort = /maps\.app\.goo\.gl|goo\.gl\/maps/.test(raw);
+  steps.push({
+    lbl:'① 短連結檢查',
+    val: isShort ? '係短連結 → 需要後端 redirect 跟蹤（HTTP 302）' : '唔係，可以直接解析結構',
+    st: isShort ? 'mid' : 'ok'
+  });
+  if(isShort){
+    data.needs_redirect=true;
+    steps.push({lbl:'② 跟蹤 redirect', val:'後端 fetch(head) → 拎最終 URL', st:'idle'});
+    steps.push({lbl:'③ 解析最終 URL', val:'跟住格式 1–4 處理', st:'idle'});
+    return {steps, partial:true};
+  }
+
+  // ② 格式 4：!3d!4d 精確座標（最準，優先）
+  const m34 = raw.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/);
+  if(m34){
+    data.lat=+m34[1]; data.lng=+m34[2];
+    steps.push({lbl:'② 精確座標 !3d!4d', val:`${data.lat}, ${data.lng}`, st:'ok'});
+  }
+
+  // ③ 格式 1：/place/店名/
+  const mPlace = decoded.match(/\/place\/([^/@?]+)/);
+  if(mPlace){
+    data.place_name = mPlace[1].replace(/\+/g,' ').trim();
+    steps.push({lbl:'③ 店名 /place/', val:data.place_name, st:'ok'});
+  } else {
+    steps.push({lbl:'③ 店名 /place/', val:'呢條 link 冇 place 路徑', st:'mid'});
+  }
+
+  // ④ 座標 @lat,lng
+  const mAt = raw.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if(mAt && !m34){
+    data.lat=+mAt[1]; data.lng=+mAt[2];
+    steps.push({lbl:'④ 地圖中心 @lat,lng', val:`${data.lat}, ${data.lng}`, st:'ok'});
+  } else if(mAt){
+    steps.push({lbl:'④ 地圖中心 @lat,lng', val:`${mAt[1]}, ${mAt[2]}（視窗中心，唔係店舖）`, st:'mid'});
+  }
+
+  // ⑤ ?q= 查詢
+  const mQ = raw.match(/[?&]q=([^&]+)/);
+  if(mQ){
+    const q = decodeURIComponent(mQ[1].replace(/\+/g,' '));
+    if(!data.place_name) data.place_name = q;
+    steps.push({lbl:'⑤ search query ?q=', val:q, st:'ok'});
+  }
+
+  // ⑥ 地名反向比對
+  if(data.place_name){
+    const hit = KNOWN_DISTRICTS.filter(d=>data.place_name.includes(d));
+    data.district = hit[0] || null;
+    steps.push({
+      lbl:'⑥ 地區比對（詞典）',
+      val: hit.length ? `命中：${hit.join(', ')}` : '冇命中，交俾 LLM 或人手',
+      st: hit.length ? 'ok' : 'mid'
+    });
+    const cat = guessCategory(data.place_name);
+    data.category = cat;
+    steps.push({
+      lbl:'⑦ 分類推斷',
+      val: cat ? `${cat.key}（因為含「${cat.why}」）` : '推斷唔到，標記為「待分類」',
+      st: cat ? 'ok' : 'mid'
+    });
+  }
+  return {steps, data};
+}
+
+/* ══════════════════════════════════════════════════════
+   WEB EXTRACTOR  ──  一般網站（前端只做結構分析）
+   ══════════════════════════════════════════════════════ */
+function extractWeb(raw, host){
+  const steps=[], data={};
+  let p;
+  try{ p=new URL(raw); }catch(e){ return {steps:[{lbl:'URL 格式',val:'解析失敗',st:'no'}],partial:true}; }
+
+  const segs = p.pathname.split('/').filter(Boolean);
+  steps.push({lbl:'① 網域', val:host, st:'ok'});
+  steps.push({lbl:'② 路徑段落', val:segs.length?segs.join(' › '):'（根目錄）', st:'ok'});
+
+  // slug → 標題估計
+  const slug = segs[segs.length-1]||'';
+  const guess = slug.replace(/\.(html?|php|aspx?)$/i,'')
+                    .replace(/[-_]+/g,' ').replace(/\d{4,}/g,'')
+                    .trim();
+  if(guess && guess.length>3 && !/^\d+$/.test(guess)){
+    data.title_guess = guess;
+    steps.push({lbl:'③ 由 URL slug 猜標題', val:guess, st:'mid'});
+  }
+
+  // 語言／地區
+  const mReg = p.pathname.match(/^\/([a-z]{2}(?:-[a-z]{2})?)\//i);
+  if(mReg) steps.push({lbl:'④ 語言／地區前綴', val:mReg[1], st:'ok'});
+
+  // 日文羅馬字 → 可能係日本網站
+  const jpHints = ['tabelog','retty','hotpepper','jalan','gnavi','suntory','rakuten'];
+  const isJp = jpHints.some(h=>host.includes(h)) || /\.jp$/.test(host);
+  if(isJp) steps.push({lbl:'⑤ 日本網站偵測', val:'係 → 可以套用日文地名詞典', st:'ok'});
+
+  steps.push({lbl:'⑥ 抓取 HTML（後端）', val:'<title> / og:title / og:image / JSON-LD', st:'idle'});
+  steps.push({lbl:'⑦ JSON-LD 結構化資料', val:'Restaurant / LocalBusiness schema → 地址、電話、營業時間、評分', st:'idle'});
+  steps.push({lbl:'⑧ 內文抽取', val:'readability 抽正文 → 交 LLM 抽地名／分類', st:'idle'});
+
+  return {steps, data, partial:true};
+}
+
+/* ══════════════════════════════════════════════════════
+   非 Maps 嘅來源：前端只能做結構分析，其餘要後端
+   ══════════════════════════════════════════════════════ */
+function extractSocial(raw, host, kind){
+  const steps=[];
+  let id = null;
+  if(kind==='ig'){
+    const m = raw.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+    id = m ? m[1] : null;
+    steps.push({lbl:'① 貼文 ID', val:id||'認唔到（可能係 profile link）', st:id?'ok':'no'});
+    steps.push({lbl:'② og:image 封面圖', val:'後端抓 HTML → <meta property="og:image">', st:'idle'});
+    steps.push({lbl:'③ og:title + description', val:'通常格式：<user> on Instagram: "<caption>"', st:'idle'});
+    steps.push({lbl:'④ Caption → 抽地名', val:'日文/中文地名詞典比對', st:'idle'});
+    steps.push({lbl:'⑤ Caption → 抽分類', val:'關鍵字：拉麵 / 咖啡 / 藥妝 / 神社 / 商場', st:'idle'});
+    steps.push({lbl:'⑥ 位置標籤', val:'IG 有 location tag 的話最準，但要登入', st:'mid'});
+    return {steps, data:{source:'ig', post_id:id, url:raw}, partial:true};
+  }
+  if(kind==='xhs'){
+    steps.push({lbl:'① 短連結展開', val:'xhslink.com → 302 → 真實 URL', st:'idle'});
+    steps.push({lbl:'② 抓 HTML', val:'小紅書反爬：需要 cookie / 簽名，成功率低', st:'no'});
+    steps.push({lbl:'③ Fallback A：用戶貼文字', val:'叫用戶 copy caption 文字入嚟（法律最乾淨）', st:'mid'});
+    steps.push({lbl:'④ Fallback B：用戶截圖', val:'AI vision 讀圖 → 抽店名、地址、地圖截圖', st:'mid'});
+    steps.push({lbl:'⑤ Fallback C：人手輸入', val:'最低要求，永遠保留', st:'ok'});
+    return {steps, data:{source:'xiaohongshu', url:raw, needs_manual:true}, partial:true};
+  }
+  if(kind==='yt'){
+    const m = raw.match(/(?:v=|youtu\.be\/|\/shorts\/)([A-Za-z0-9_-]{6,})/);
+    steps.push({lbl:'① 影片 ID', val:m?m[1]:'認唔到', st:m?'ok':'no'});
+    steps.push({lbl:'② oEmbed（官方免費）', val:'https://www.youtube.com/oembed?url=… → 標題、作者、縮圖', st:'ok'});
+    steps.push({lbl:'③ 描述文字', val:'後端抓 → 常含店名同地址', st:'idle'});
+    return {steps, data:{source:'youtube', video_id:m?m[1]:null, url:raw}, partial:true};
+  }
+  steps.push({lbl:'① 來源', val:host, st:'mid'});
+  steps.push({lbl:'② 抓 HTML', val:'後端處理', st:'idle'});
+  return {steps, data:{url:raw}, partial:true};
+}
+
+/* ══════════════════════════════════════════════════════
+   分類推斷（rule-based 起手，之後可換 ML）
+   ══════════════════════════════════════════════════════ */
+const CAT_RULES = [
+  {key:'food',     why:'拉麵', w:['ラーメン','拉麵','らーめん','ramen']},
+  {key:'food',     why:'燒肉', w:['焼肉','燒肉','yakiniku','和牛']},
+  {key:'food',     why:'咖啡', w:['カフェ','咖啡','coffee','喫茶']},
+  {key:'food',     why:'壽司', w:['寿司','すし','壽司','sushi']},
+  {key:'food',     why:'居酒屋', w:['居酒屋','izakaya','串焼']},
+  {key:'food',     why:'甜品', w:['スイーツ','甜品','パフェ','ケーキ']},
+  {key:'shopping', why:'藥妝', w:['薬','ドラッグ','藥妝','matsumoto','松本清']},
+  {key:'shopping', why:'百貨', w:['百貨','デパート','department','阪急','三越','parco']},
+  {key:'shopping', why:'商場', w:['商城','商場','mall','運河城','キャナル']},
+  {key:'shopping', why:'超市', w:['スーパー','超市','ドン・キホーテ','唐吉']},
+  {key:'play',     why:'神社', w:['神社','神宮','寺','大社','temple','shrine']},
+  {key:'play',     why:'公園', w:['公園','park','庭園']},
+  {key:'play',     why:'展望台', w:['展望','タワー','tower','夜景']},
+  {key:'play',     why:'溫泉', w:['温泉','onsen','銭湯','風呂']},
+  {key:'play',     why:'美術館', w:['美術館','museum','博物館','アート']},
+  {key:'stay',     why:'酒店', w:['ホテル','hotel','旅館','宿','ryokan']},
+];
+function guessCategory(text){
+  const t = text.toLowerCase();
+  for(const r of CAT_RULES){
+    for(const w of r.w){
+      if(t.includes(w.toLowerCase())) return {key:r.key, why:w};
+    }
+  }
+  return null;
+}
+const KNOWN_DISTRICTS = [
+  '博多','天神','中洲','大濠','薬院','住吉','祇園','呉服町','箱崎',
+  '太宰府','門司港','小倉','柳川','糸島','能古島','姪浜','西新','春日',
+  '難波','心齋橋','梅田','道頓堀','新宿','渋谷','銀座','浅草','秋葉原',
+  '弘大','明洞','江南','梨泰院','聖水',
+];
+
+/* ══════════════════════════════════════════════════════
+   UI
+   ══════════════════════════════════════════════════════ */
+const EXAMPLES=[
+  {t:'Google Maps · /place/',     u:'https://www.google.com/maps/place/Ichiran+Hakata+Shop/@33.5897,130.4207,17z/data=!4m6!3m5!1s0x3541918a8d5c9e97:0x8b8f3e2a1c9d4f21!8m2!3d33.5897!4d130.4207'},
+  {t:'Google Maps · ?q=',          u:'https://www.google.com/maps/search/?api=1&query=Canal+City+Hakata+Fukuoka'},
+  {t:'Google Maps · 短連結',        u:'https://maps.app.goo.gl/xK9mQ2vLp8TnR4wY7'},
+  {t:'網站 · 日本推介文',           u:'https://tabelog.com/fukuoka/A4001/A400101/40001234/'},
+  {t:'網站 · Blog 推介',            u:'https://www.klook.com/zh-TW/blog/fukuoka-must-eat-ramen-guide/'},
+  {t:'Instagram Post',             u:'https://www.instagram.com/p/C8xK2mQvLp8/'},
+  {t:'Instagram Reel',             u:'https://www.instagram.com/reel/C9aB3nRwZq1/'},
+  {t:'小紅書',                      u:'https://www.xiaohongshu.com/explore/665f2a1b000000001e02c3d4'},
+  {t:'YouTube',                    u:'https://www.youtube.com/watch?v=dQw4w9WgXcQ'},
+];
+
+function renderExamples(){
+  const box=document.getElementById('ex');
+  box.innerHTML = EXAMPLES.map((e,i)=>
+    `<button class="ex" onclick="runExample(${i})"><b>▸</b> ${e.t}</button>`
+  ).join('');
+}
+function runExample(i){
+  document.getElementById('u').value = EXAMPLES[i].u;
+  run();
+}
+
+/* 輸出 JSON 上色 */
+function lit(obj){
+  const json = JSON.stringify(obj,null,2);
+  return json
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"([^"]+)":/g,'<span class="k">"$1"</span>:')
+    .replace(/: "([^"]*)"/g,': <span class="s">"$1"</span>')
+    .replace(/: (true|false|null)/g,': <span class="nul">$1</span>')
+    .replace(/: (-?\d+\.?\d*)/g,': <span class="num">$1</span>');
+}
+
+function setScore(id, val, cls){
+  const el=document.getElementById(id);
+  el.className='sc '+(cls||'');
+  el.querySelector('.vv').textContent = val;
+}
+
+function run(){
+  const raw = document.getElementById('u').value.trim();
+  const stepsBox = document.getElementById('steps');
+  const outBox = document.getElementById('out');
+  const srcBadge = document.getElementById('srcBadge');
+  const confBadge = document.getElementById('confBadge');
+
+  if(!raw){ stepsBox.innerHTML='<p style="color:var(--dim);font-size:12.5px">請先貼一條 link。</p>'; return; }
+
+  const kind = classify(raw);
+  srcBadge.textContent = kind.name;
+
+  if(kind.id==='invalid'){
+    stepsBox.innerHTML = `<div class="step"><span class="n">!</span>
+      <div class="t"><span class="lbl">無法解析</span>
+      <span class="val miss">唔似係一條有效 URL，記得要連 https:// 一齊貼</span></div></div>`;
+    outBox.innerHTML = '<span class="cm">// 無效輸入</span>';
+    confBadge.textContent='confidence —';
+    setScore('scPlace','—'); setScore('scLoc','—'); setScore('scCat','—');
+    return;
+  }
+
+  // 加「來源判斷」做第 0 步
+  let r;
+  if(kind.id==='gmaps')      r = extractGmaps(raw);
+  else if(kind.id==='web' || kind.id==='tabelog' || kind.id==='ta')
+                             r = extractWeb(raw, kind.host);
+  else                       r = extractSocial(raw, kind.host, kind.id);
+
+  const steps = [{lbl:'⓪ 來源判斷', val:`${kind.name}（${kind.host}）`, st:'ok'}, ...r.steps];
+
+  stepsBox.innerHTML = steps.map((s,i)=>`
+    <div class="step" style="animation-delay:${i*45}ms">
+      <span class="n">${i}</span>
+      <div class="t"><span class="lbl">${s.lbl}</span><span class="val ${s.st==='ok'?'hit':s.st==='no'?'miss':s.st==='mid'?'part':''}">${s.val}</span></div>
+      <span class="st ${s.st}">${s.st==='ok'?'✓':s.st==='no'?'✗':s.st==='mid'?'~':'⋯'}</span>
+    </div>`).join('');
+
+  const d = r.data || {};
+  d.source = kind.id;
+  d.source_name = kind.name;
+  d.url = raw;
+  d.parsed_at = new Date().toISOString().slice(0,19);
+
+  // 信心分數（示範用嘅計法）
+  let conf;
+  if(kind.id==='gmaps'){
+    conf = d.place_name && d.lat ? 100 : d.place_name ? 88 : 40;
+  } else if(kind.id==='web'||kind.id==='tabelog'||kind.id==='ta'){
+    conf = 55; d.note='後端抓 HTML 之後可升至 80%+';
+  } else if(kind.id==='yt'){
+    conf = 62; d.note='oEmbed 攞到標題，描述要後端';
+  } else if(kind.id==='ig'){
+    conf = 48; d.note='要後端抓 caption 先可以抽地名';
+  } else {
+    conf = 12; d.needs_manual = true; d.note='建議：用戶貼文字 或 截圖上傳';
+  }
+  d.confidence = conf;
+  if(!d.category) d.category = null;
+  if(!d.district) d.district = null;
+  d.needs_review = conf < 70;
+
+  outBox.innerHTML = lit(d);
+  confBadge.textContent = `confidence ${conf}%`;
+
+  setScore('scPlace', d.place_name || (d.title_guess||'—'),
+           d.place_name?'hi':d.title_guess?'md':'lo');
+  setScore('scLoc', d.district || (d.lat?'有座標':'—'),
+           d.district?'hi':d.lat?'md':'lo');
+  setScore('scCat', d.category ? d.category : '—',
+           d.category?'hi':'lo');
+}
+
+/* 初始化 */
+renderExamples();
+document.getElementById('u').addEventListener('keydown', e=>{ if(e.key==='Enter') run(); });
+runExample(0);
+</script>
+</body>
+</html>

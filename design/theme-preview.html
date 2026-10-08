@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="galaxy">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>福岡 2027 · Theme Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+JP:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   THEME TOKENS
+   每個 theme 只係改呢一組變數。加新風格 = 加一段 CSS。
+   之後會搬去 theme.json，由 Supabase 讀，用戶自選。
+   ============================================================ */
+:root{
+  --font: 'Inter','Noto Sans TC',system-ui,sans-serif;
+  --font-display: 'Inter','Noto Sans TC',system-ui,sans-serif;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --gap: 14px;
+}
+
+/* ── 1. 銀河系紫藍像素 ─────────────────────────── */
+[data-theme="galaxy"]{
+  --font-display:'Press Start 2P','Noto Sans TC',monospace;
+  --bg:#0a0620; --bg-2:#150b33;
+  --surface:#1a0f3d; --surface-2:#241452;
+  --border:#3d2a80; --border-hi:#8b5cf6;
+  --text:#ece9ff; --text-dim:#a99cd6;
+  --accent:#a855f7; --accent-2:#22d3ee;
+  --chip:#2a1a5e; --chip-text:#c9b8ff;
+  --vote:#f472b6;
+  --radius:14px; --radius-sm:8px;
+  --glow: 0 0 22px rgba(168,85,247,.45);
+  --bar:linear-gradient(90deg,#a855f7,#22d3ee,#f472b6);
+  --shadow:0 8px 28px rgba(0,0,0,.55);
+  --img-a:#2d1b69; --img-b:#0f3f5c;
+}
+/* ── 2. 黑白科技 ────────────────────────────────── */
+[data-theme="tech"]{
+  --font:'JetBrains Mono','Noto Sans TC',monospace;
+  --font-display:'JetBrains Mono','Noto Sans TC',monospace;
+  --bg:#0d0d0f; --bg-2:#141417;
+  --surface:#16161a; --surface-2:#1d1d22;
+  --border:#2c2c33; --border-hi:#e8e8e8;
+  --text:#f4f4f5; --text-dim:#8a8a94;
+  --accent:#ffffff; --accent-2:#a1a1aa;
+  --chip:#232329; --chip-text:#d4d4d8;
+  --vote:#f4f4f5;
+  --radius:4px; --radius-sm:3px;
+  --glow:none;
+  --bar:linear-gradient(90deg,#fff,#71717a);
+  --shadow:0 2px 0 #000, 0 10px 24px rgba(0,0,0,.6);
+  --img-a:#26262c; --img-b:#101013;
+}
+/* ── 3. 簡約淺色 ────────────────────────────────── */
+[data-theme="minimal"]{
+  --bg:#fafaf9; --bg-2:#f4f4f2;
+  --surface:#ffffff; --surface-2:#f7f7f5;
+  --border:#e7e5e4; --border-hi:#1c1917;
+  --text:#1c1917; --text-dim:#78716c;
+  --accent:#1c1917; --accent-2:#57534e;
+  --chip:#f0efed; --chip-text:#44403c;
+  --vote:#1c1917;
+  --radius:18px; --radius-sm:10px;
+  --glow:none;
+  --bar:linear-gradient(90deg,#1c1917,#a8a29e);
+  --shadow:0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.06);
+  --img-a:#eceae7; --img-b:#dcdad6;
+}
+/* ── 4. 卡其大地色 ──────────────────────────────── */
+[data-theme="khaki"]{
+  --bg:#f4efe4; --bg-2:#ebe4d5;
+  --surface:#fffaf0; --surface-2:#f5eee0;
+  --border:#dccfb4; --border-hi:#7d6a45;
+  --text:#3b3222; --text-dim:#877a5e;
+  --accent:#8a7048; --accent-2:#a98a5c;
+  --chip:#eae0cb; --chip-text:#6b5c3d;
+  --vote:#8a7048;
+  --radius:12px; --radius-sm:8px;
+  --glow:none;
+  --bar:linear-gradient(90deg,#8a7048,#c4a878);
+  --shadow:0 2px 6px rgba(120,100,60,.10), 0 12px 28px rgba(120,100,60,.10);
+  --img-a:#e3d7be; --img-b:#cdbb98;
+}
+/* ── 5. 馬卡龍 ──────────────────────────────────── */
+[data-theme="macaron"]{
+  --bg:#fff8fb; --bg-2:#fdf1f6;
+  --surface:#ffffff; --surface-2:#fff5fa;
+  --border:#fbdce9; --border-hi:#f7a8c4;
+  --text:#5a4550; --text-dim:#a98b9a;
+  --accent:#f472b6; --accent-2:#7dd3fc;
+  --chip:#fde8f2; --chip-text:#b96a8f;
+  --vote:#fb923c;
+  --radius:22px; --radius-sm:14px;
+  --glow:0 6px 20px rgba(244,114,182,.18);
+  --bar:linear-gradient(90deg,#f9a8d4,#a5b4fc,#7dd3fc,#fcd34d);
+  --shadow:0 4px 14px rgba(244,114,182,.14), 0 14px 34px rgba(167,139,250,.12);
+  --img-a:#ffe0ef; --img-b:#dbeafe;
+}
+/* ── 6. 和風（追加） ────────────────────────────── */
+[data-theme="wafu"]{
+  --font:'Noto Serif JP','Noto Sans TC',serif;
+  --font-display:'Noto Serif JP','Noto Sans TC',serif;
+  --bg:#f7f4ec; --bg-2:#efe9dc;
+  --surface:#fffdf8; --surface-2:#f4efe3;
+  --border:#ded3bd; --border-hi:#8c2f39;
+  --text:#2f2a24; --text-dim:#8a8172;
+  --accent:#b03a48; --accent-2:#2f4b4e;
+  --chip:#efe6d6; --chip-text:#6d5c45;
+  --vote:#b03a48;
+  --radius:6px; --radius-sm:4px;
+  --glow:none;
+  --bar:linear-gradient(90deg,#b03a48,#2f4b4e);
+  --shadow:0 2px 8px rgba(90,70,40,.10);
+  --img-a:#e8ddc6; --img-b:#c9bda3;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:var(--font);
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  transition:background .28s ease, color .28s ease;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ── Theme 切換列 ─────────────────────────────── */
+.switcher{
+  position:sticky;top:0;z-index:60;
+  background:color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);
+  padding:12px 16px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+}
+.switcher-label{
+  font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--text-dim);margin-right:4px;font-weight:600;
+}
+.tbtn{
+  font-family:var(--font);font-size:12px;font-weight:600;
+  padding:7px 13px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--border);
+  background:var(--surface);color:var(--text-dim);
+  transition:all .18s ease;
+}
+.tbtn:hover{border-color:var(--border-hi);color:var(--text)}
+.tbtn[aria-pressed="true"]{
+  background:var(--accent);color:var(--bg);
+  border-color:var(--accent);box-shadow:var(--glow);
+}
+[data-theme="tech"] .tbtn[aria-pressed="true"]{color:#0d0d0f}
+[data-theme="minimal"] .tbtn[aria-pressed="true"],
+[data-theme="khaki"] .tbtn[aria-pressed="true"],
+[data-theme="macaron"] .tbtn[aria-pressed="true"],
+[data-theme="wafu"] .tbtn[aria-pressed="true"]{color:#fff}
+
+.wrap{max-width:820px;margin:0 auto;padding:0 16px 72px}
+
+/* ── 頂部 ─────────────────────────────────────── */
+.hero{padding:30px 0 20px}
+.hero-bar{height:4px;background:var(--bar);border-radius:99px;margin-bottom:20px}
+.hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.hero h1{
+  font-family:var(--font-display);
+  font-size:var(--h1,26px);line-height:1.35;letter-spacing:-.01em;
+}
+[data-theme="galaxy"] .hero h1{font-size:17px;line-height:1.7;letter-spacing:.02em}
+.hero .sub{color:var(--text-dim);font-size:13px;margin-top:8px}
+.count{
+  font-family:var(--font-display);font-size:11px;
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:8px 12px;color:var(--text-dim);white-space:nowrap;
+  background:var(--surface);
+}
+.count b{color:var(--accent);font-size:15px}
+
+/* ── 貼 link 欄 ───────────────────────────────── */
+.paste{
+  display:flex;gap:8px;margin:22px 0 18px;
+}
+.paste input{
+  flex:1;font-family:var(--font);font-size:13px;
+  padding:13px 15px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--surface);
+  color:var(--text);outline:none;transition:border-color .18s;
+}
+.paste input::placeholder{color:var(--text-dim);opacity:.7}
+.paste input:focus{border-color:var(--accent)}
+.paste button{
+  font-family:var(--font);font-weight:700;font-size:13px;
+  padding:13px 20px;border-radius:var(--radius-sm);cursor:pointer;
+  border:1px solid var(--accent);background:var(--accent);color:var(--bg);
+  transition:all .18s;
+}
+[data-theme="tech"] .paste button{color:#0d0d0f}
+[data-theme="minimal"] .paste button,
+[data-theme="khaki"] .paste button,
+[data-theme="macaron"] .paste button,
+[data-theme="wafu"] .paste button{color:#fff}
+.paste button:active{transform:scale(.97)}
+
+/* ── 分類 tabs ────────────────────────────────── */
+.tabs{display:flex;gap:7px;overflow-x:auto;padding-bottom:4px;margin-bottom:16px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{
+  font-family:var(--font);font-size:12px;font-weight:600;white-space:nowrap;
+  padding:8px 15px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--border);background:var(--surface);color:var(--text-dim);
+  transition:all .18s;
+}
+.tab:hover{color:var(--text);border-color:var(--border-hi)}
+.tab[aria-pressed="true"]{background:var(--chip);color:var(--chip-text);border-color:var(--border-hi)}
+
+/* ── 地區標題 ─────────────────────────────────── */
+.district{
+  display:flex;align-items:center;gap:10px;
+  margin:26px 0 12px;font-size:13px;font-weight:700;letter-spacing:.06em;
+}
+.district::after{content:'';flex:1;height:1px;background:var(--border)}
+.district span{color:var(--accent);font-size:11px;font-weight:600;opacity:.85}
+
+/* ── 卡片 ─────────────────────────────────────── */
+.grid{display:grid;gap:var(--gap);grid-template-columns:repeat(auto-fill,minmax(232px,1fr))}
+.card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);overflow:hidden;
+  box-shadow:var(--shadow);
+  transition:transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+  display:flex;flex-direction:column;
+}
+.card:hover{transform:translateY(-3px);border-color:var(--border-hi)}
+[data-theme="galaxy"] .card:hover{box-shadow:var(--shadow),var(--glow)}
+.card.corrected{border-style:dashed;border-color:var(--accent)}
+
+.thumb{
+  height:104px;position:relative;
+  background:linear-gradient(135deg,var(--img-a),var(--img-b));
+  display:flex;align-items:center;justify-content:center;font-size:36px;
+  border-bottom:1px solid var(--border);
+}
+.src{
+  position:absolute;top:9px;left:9px;
+  font-family:var(--font-display);font-size:9px;font-weight:700;
+  padding:4px 8px;border-radius:var(--radius-sm);
+  background:color-mix(in srgb, var(--bg) 78%, transparent);
+  color:var(--text);border:1px solid var(--border);
+  backdrop-filter:blur(6px);letter-spacing:.04em;
+}
+.conf{
+  position:absolute;top:9px;right:9px;
+  font-size:9px;font-weight:700;padding:4px 7px;border-radius:99px;
+  background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border);
+}
+.conf.low{color:var(--vote);border-color:var(--vote)}
+
+.body{padding:13px 14px 14px;display:flex;flex-direction:column;gap:9px;flex:1}
+.name{font-size:14px;font-weight:700;line-height:1.4}
+.note{font-size:12px;color:var(--text-dim);line-height:1.55}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:4px}
+.chip{
+  font-size:10px;font-weight:600;padding:4px 9px;border-radius:999px;
+  background:var(--chip);color:var(--chip-text);
+}
+.chip.cat{border:1px solid var(--border-hi);background:transparent;color:var(--text)}
+
+.foot{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;border-top:1px solid var(--border);background:var(--surface-2);
+}
+.vote{
+  display:flex;align-items:center;gap:6px;cursor:pointer;
+  font-size:12px;font-weight:700;color:var(--text-dim);
+  background:none;border:none;font-family:var(--font);padding:0;
+  transition:color .18s;
+}
+.vote:hover{color:var(--vote)}
+.vote.on{color:var(--vote)}
+.ai{
+  font-size:10px;color:var(--text-dim);cursor:pointer;
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:4px 8px;background:var(--surface);font-family:var(--font);
+  transition:all .18s;
+}
+.ai:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ── 說明 ─────────────────────────────────────── */
+.legend{
+  margin-top:34px;padding:16px;border:1px dashed var(--border);
+  border-radius:var(--radius);font-size:12px;color:var(--text-dim);line-height:1.85;
+}
+.legend b{color:var(--text)}
+.legend code{
+  font-family:'JetBrains Mono',monospace;font-size:11px;
+  background:var(--chip);color:var(--chip-text);
+  padding:2px 6px;border-radius:4px;
+}
+@media(max-width:520px){
+  .hero h1{font-size:21px}
+  [data-theme="galaxy"] .hero h1{font-size:14px}
+  .grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<nav class="switcher">
+  <span class="switcher-label">Theme</span>
+  <button class="tbtn" data-set="galaxy" aria-pressed="true">銀河紫藍</button>
+  <button class="tbtn" data-set="tech">黑白科技</button>
+  <button class="tbtn" data-set="minimal">簡約</button>
+  <button class="tbtn" data-set="khaki">卡其</button>
+  <button class="tbtn" data-set="macaron">馬卡龍</button>
+  <button class="tbtn" data-set="wafu">和風</button>
+</nav>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="hero-bar"></div>
+    <div class="hero-top">
+      <div>
+        <h1>福岡 2027</h1>
+        <p class="sub">4 個人 · 博多站集合 · 仲有 312 日</p>
+      </div>
+      <div class="count"><b>12</b> 個收藏</div>
+    </div>
+  </header>
+
+  <div class="paste">
+    <input id="pasteInput" type="text" placeholder="貼 IG / Google Maps link 落嚟…">
+    <button id="pasteBtn">加入</button>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab" data-cat="all" aria-pressed="true">全部 12</button>
+    <button class="tab" data-cat="美食">🍜 美食 5</button>
+    <button class="tab" data-cat="Shopping">🛍 Shopping 3</button>
+    <button class="tab" data-cat="玩">🎡 玩 3</button>
+    <button class="tab" data-cat="住宿">🏨 住宿 1</button>
+  </div>
+
+  <div id="list"></div>
+
+  <div class="legend">
+    <b>呢個 preview 想示範嘅嘢：</b><br>
+    ① 六個 theme <b>共用同一套 DOM 同 layout</b>，只係換 CSS 變數 —— 加新風格唔會改到功能<br>
+    ② <code>信心分數</code> 徽章 = 解析引擎嘅把握程度。低信心會用虛線框提示你人手改<br>
+    ③ 貼 link 欄同投票係真嘅，按落去有反應（而家係假資料，Phase 2 會駁 Python 引擎）<br>
+    ④ 地區分組（博多 / 天神 / 中洲）自動生成，唔係手動排
+  </div>
+
+</div>
+
+<script>
+/* ── 假資料：模擬 Python 解析引擎嘅輸出 ─────────── */
+const DATA = [
+  {d:'博多', items:[
+    {n:'一蘭 本社總店',e:'🍜',cat:'美食',src:'IG',c:98,v:3,note:'24 小時營業，博多站行 5 分鐘。深夜落機都食得到。'},
+    {n:'博多一幸舍',e:'🍜',cat:'美食',src:'IG',c:91,v:2,note:'濃厚豚骨，本地人推薦。'},
+    {n:'博多運河城',e:'🛍',cat:'Shopping',src:'Maps',c:100,v:2,note:'有噴水 show，行街＋睇戲＋食飯一次搞掂。'},
+    {n:'博多織 伝統工芸館',e:'🎎',cat:'Shopping',src:'Maps',c:100,v:0,note:'買手信，博多織小物。'},
+  ]},
+  {d:'天神', items:[
+    {n:'天神地下街',e:'🛍',cat:'Shopping',src:'Maps',c:100,v:3,note:'落雨救命，直通地鐵。'},
+    {n:'屋台 天神エリア',e:'🏮',cat:'美食',src:'小紅書',c:52,v:4,note:'⚠️ 小紅書解析唔到店名，要人手補。夜晚 6 點後開。'},
+    {n:'福岡市美術館',e:'🎨',cat:'玩',src:'IG',c:88,v:1,note:'大濠公園隔離，順路。'},
+  ]},
+  {d:'中洲', items:[
+    {n:'中洲屋台橫丁',e:'🏮',cat:'美食',src:'Maps',c:100,v:4,note:'福岡必去。建議 8 點前去，唔係要排一個鐘。'},
+    {n:'中洲川端商店街',e:'🛍',cat:'Shopping',src:'Maps',c:97,v:1,note:'有蓋商店街，平價藥妝。'},
+    {n:'那珂川夜遊',e:'🌃',cat:'玩',src:'IG',c:74,v:2,note:'夜晚沿河散步，影相一流。'},
+  ]},
+  {d:'近郊', items:[
+    {n:'太宰府天滿宮',e:'⛩',cat:'玩',src:'IG',c:95,v:4,note:'半日行程，西鐵直達。梅ヶ枝餅必食。'},
+    {n:'門司港レトロ',e:'🚢',cat:'玩',src:'小紅書',c:41,v:1,note:'⚠️ 要坐 JR 一個鐘，未確認去唔去。'},
+  ]},
+  {d:'未分類', items:[
+    {n:'（解析失敗，待補）',e:'❓',cat:'住宿',src:'IG',c:0,v:0,note:'貼咗條 link 但抽唔到資料 —— 等緊人手輸入或者 AI 睇圖。',corrected:true},
+  ]}
+];
+
+const list = document.getElementById('list');
+const CAT_EMOJI = {'美食':'🍜','Shopping':'🛍','玩':'🎡','住宿':'🏨'};
+
+function render(cat='all'){
+  list.innerHTML = DATA.map(group=>{
+    const items = cat==='all' ? group.items : group.items.filter(i=>i.cat===cat);
+    if(!items.length) return '';
+    return `<div class="district">${group.d} <span>${items.length}</span></div>
+      <div class="grid">${items.map((i,idx)=>card(i,group.d,idx)).join('')}</div>`;
+  }).join('');
+}
+
+function card(i,district,idx){
+  const confClass = i.c < 70 ? 'conf low' : 'conf';
+  const confText  = i.c === 0 ? '待補' : i.c + '%';
+  return `<article class="card${i.corrected?' corrected':''}">
+    <div class="thumb">${i.e}
+      <span class="src">${i.src}</span>
+      <span class="${confClass}">${confText}</span>
+    </div>
+    <div class="body">
+      <div class="name">${i.n}</div>
+      <div class="note">${i.note}</div>
+      <div class="chips">
+        <span class="chip cat">${CAT_EMOJI[i.cat]||''} ${i.cat}</span>
+        <span class="chip">${district}</span>
+      </div>
+    </div>
+    <div class="foot">
+      <button class="vote${i.v>0?' on':''}">▲ <span>${i.v}</span></button>
+      <button class="ai">✎ 改正</button>
+    </div>
+  </article>`;
+}
+
+/* 投票 */
+list.addEventListener('click', e=>{
+  const btn = e.target.closest('.vote');
+  if(!btn) return;
+  const span = btn.querySelector('span');
+  const on = btn.classList.toggle('on');
+  span.textContent = Number(span.textContent) + (on?1:-1);
+});
+
+/* 分類 tab */
+document.getElementById('tabs').addEventListener('click', e=>{
+  const t = e.target.closest('.tab');
+  if(!t) return;
+  document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-pressed','false'));
+  t.setAttribute('aria-pressed','true');
+  render(t.dataset.cat);
+});
+
+/* Theme 切換 */
+document.querySelector('.switcher').addEventListener('click', e=>{
+  const b = e.target.closest('.tbtn');
+  if(!b) return;
+  document.querySelectorAll('.tbtn').forEach(x=>x.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true');
+  document.documentElement.setAttribute('data-theme', b.dataset.set);
+});
+
+/* 貼 link（示範用，真身會 call Python API） */
+document.getElementById('pasteBtn').addEventListener('click', ()=>{
+  const inp = document.getElementById('pasteInput');
+  if(!inp.value.trim()){ inp.focus(); return; }
+  inp.value = '';
+  inp.placeholder = '✓ 收到！Phase 2 會送去 Python 解析引擎…';
+  setTimeout(()=>{ inp.placeholder='貼 IG / Google Maps link 落嚟…'; }, 2200);
+});
+
+render();
+</script>
+</body>
+</html>

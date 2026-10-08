@@ -1,0 +1,28 @@
+# ⚠️ Wander 後端依賴
+#
+#   ⚠️ 之前**冇呢個檔案** —— Dockerfile / Codespaces 都會爆。
+#      而家由實際 import 生成（見 README 嘅「依賴」段）。
+#
+#   ⚠️ 用 `>=` 而唔係 `==` —— 呢個 app 唔會因為 library 小版本
+#      升級而壞（全部都係穩定 API）。但如果你想鎖死就改 `==`。
+
+# ── Web 框架 ──
+fastapi>=0.115
+uvicorn>=0.30
+pydantic>=2.7
+
+# ── HTTP（Photon / Nominatim / Overpass / IG provider）──
+requests>=2.31
+
+# ── QR code 解碼（用戶上傳相片 → 伺服器解）──
+#   ⚠️ 一定要 `-headless` —— 普通 `opencv-python` 要成個 GUI stack
+#      （libGL 成 200MB），喺容器入面係浪費。
+opencv-python-headless>=4.9
+
+# ── QR code 編碼（我哋自己寫嘅純 Python encoder，唔使 library）──
+#   （唔使 qrcode 套件 —— 見 engine/wander/qr.py）
+
+# ── 圖像處理（頭像 / 角色圖 / 去背工具）──
+Pillow>=10.0
+numpy>=1.26
+scipy>=1.11

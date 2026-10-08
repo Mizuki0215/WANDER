@@ -1,0 +1,46 @@
+# ⚠️⚠️ 呢個檔案好重要 —— 唔可以 commit 任何秘密或者資料
+
+# ── 資料庫（用戶資料！）──
+server/wander.db
+server/wander.db-wal
+server/wander.db-shm
+server/backup-*.db
+*.sqlite
+*.sqlite3
+
+# ── 秘密 ──
+server/.env
+.env
+.env.*
+!.env.example
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# ── Node ──
+node_modules/
+web/dist/
+.vite/
+npm-debug.log*
+
+# ── 快取（引擎嘅 geocode cache 有真實查詢紀錄）──
+engine/wander/data/geocode_cache.json
+engine/wander/data/*.tmp
+
+# ── macOS / 編輯器 ──
+.DS_Store
+.Trash/
+*.swp
+.idea/
+.vscode/
+
+# ── 工作用嘅臨時目錄（唔應該 commit）──
+.npm-cache/
+.tools/
+.pytest_cache/
+*.log

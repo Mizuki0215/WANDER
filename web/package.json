@@ -1,0 +1,21 @@
+{
+  "name": "wander-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node ../tests/web/ssr.test.mjs && node ../tests/web/api.test.mjs && node ../tests/web/dom.test.mjs && node ../tests/web/buttons.test.mjs && node ../tests/web/fixes4.test.mjs && node ../tests/web/selfcheck.test.mjs && node ../tests/web/responsive.test.mjs && node ../tests/web/render.test.mjs && node ../tests/web/bookmarklet.test.mjs && node ../tests/web/bookmarklet-dom.test.mjs && node ../tests/web/stops.test.mjs && node ../tests/web/sw.test.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^30.1.2",
+    "vite": "^5.4.11"
+  }
+}

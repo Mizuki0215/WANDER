@@ -1,0 +1,1480 @@
+/* ══════════════════════════════════════════════════════════
+   Wander — Theme 系統
+   每個 theme 只係一組 CSS 變數。加新風格 = 加一段 [data-theme="x"]
+   （完全對應 design/theme-preview.html 嘅設計）
+   ══════════════════════════════════════════════════════════ */
+
+:root {
+  --font: 'Noto Sans TC', -apple-system, system-ui, sans-serif;
+  --font-pix: 'Press Start 2P', monospace;
+  /* ══════════════════════════════════════════════════════
+     圓角系統（iPhone 風格）
+     ══════════════════════════════════════════════════════
+
+     ⚠️⚠️ 用戶原話：
+        「不過框框嘅弧度你可以參考吓 iPhone 嗰種弧度囉，
+         因為正方形長方形呢個好難睇，
+         或者係想要有少少弧度嘅感覺。
+         所以你應該要將所有嘅嘢啦，唔好淨係一個長方形，
+         而係真係要有少少嘅弧度。」
+
+     ⚠️ 呢個係一個**真實嘅可讀性問題**，唔止係審美：
+        · 直角框喺深色背景上會「拮眼」—— 眼睛要處理四個硬轉角
+        · 直角框嘅內容（文字）同邊框之間嘅視覺張力唔平均
+        · 圓角框嘅視線會自然流向中間 → 內容更易讀
+
+     ⚠️⚠️ 點解要**一套 scale** 而唔係逐個寫：
+        舊版有 `--r` / `--r-sm` / `--px-r` 三個來源，而且
+        像素風 CSS 用 `--px-r: 2px` + `!important` 蓋咗好多嘢 →
+        結果有啲位圓（9px）、有啲位方（2px）→ **唔一致**。
+
+     ⚠️ iPhone 嘅實際數值（參考）：
+        · 卡片 / 清單        ~10-12pt
+        · 按鈕               ~10-14pt
+        · App icon           **22.37%**（唔係一般圓角，係 squircle）
+        · Sheet / Modal      ~16-20pt
+     */
+  --r-xs:   8px;    /* 細標籤：chip / badge / 縮圖 */
+  --r-sm:  12px;    /* 中：按鈕 / 輸入框 */
+  --r:     18px;    /* 大：卡片 / 面板 */
+  --r-lg:  26px;    /* 特大：modal / sheet 頂 */
+  --r-full: 999px;  /* 膠囊 */
+  --r-ico: 24%;     /* ⚠️ App icon 用**百分比**（同 iPhone 一樣）*/
+  /* ⚠️⚠️ iPhone 有劉海／動態島 → 四邊都要留安全區。
+     原本只有 --safe-b（底部），但 Lightbox 用咗 --safe-t
+     → invalid value → 成個 padding declaration 被丟棄 → 個 ✕ 掣
+       會被動態島遮住。
+     ⚠️ env() 一定要有 fallback（0px），否則舊瀏覽器會當無效。 */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --nav-h: 62px;
+}
+
+/* ── 銀河紫藍像素（預設）────────────────────────────── */
+[data-theme='galaxy'] {
+  --bg: #0b0518;
+  --bg-2: #120a26;
+  --surface: #160d2e;
+  --surface-2: #1d1140;
+  --surface-3: #251757;
+  --border: #3a2570;
+  --border-hi: #7c3aed;
+  --neon: #a855f7;
+  --cyan: #22d3ee;
+  --pink: #f472b6;
+  --text: #efeaff;
+  --dim: #9d8fc4;
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --grad: linear-gradient(100deg, #a855f7, #22d3ee);
+  --glow: 0 0 18px rgba(168, 85, 247, .5);
+  --scan: rgba(168, 85, 247, .055);
+  --star: 1;
+}
+
+/* ── 黑白科技 ───────────────────────────────────────── */
+[data-theme='tech'] {
+  --font: 'JetBrains Mono', ui-monospace, monospace;
+  --bg: #0d0d0f; --bg-2: #141417; --surface: #16161a; --surface-2: #1d1d22;
+  --surface-3: #232329; --border: #2c2c33; --border-hi: #e8e8e8;
+  --neon: #ffffff; --cyan: #a1a1aa; --pink: #d4d4d8;
+  --text: #f4f4f5; --dim: #8a8a94;
+  --ok: #4ade80; --warn: #facc15; --bad: #f87171;
+  --grad: linear-gradient(100deg, #fff, #71717a);
+  --glow: none; --scan: rgba(255,255,255,.03); --star: 0;
+  --r: 14px; --r-sm: 10px; --r-xs: 7px; --r-lg: 20px;
+}
+
+/* ── 簡約 ───────────────────────────────────────────── */
+[data-theme='minimal'] {
+  --bg: #fafaf9; --bg-2: #f4f4f2; --surface: #ffffff; --surface-2: #f7f7f5;
+  --surface-3: #f0efed; --border: #e7e5e4; --border-hi: #1c1917;
+  --neon: #1c1917; --cyan: #57534e; --pink: #78716c;
+  --text: #1c1917; --dim: #78716c;
+  --ok: #059669; --warn: #d97706; --bad: #dc2626;
+  --grad: linear-gradient(100deg, #1c1917, #a8a29e);
+  --glow: none; --scan: transparent; --star: 0;
+  --r: 20px; --r-sm: 14px; --r-xs: 9px; --r-lg: 28px;
+}
+
+/* ── 卡其 ───────────────────────────────────────────── */
+[data-theme='khaki'] {
+  --bg: #f4efe4; --bg-2: #ebe4d5; --surface: #fffaf0; --surface-2: #f5eee0;
+  --surface-3: #eae0cb; --border: #dccfb4; --border-hi: #8a7048;
+  --neon: #8a7048; --cyan: #a98a5c; --pink: #7d6a45;
+  --text: #3b3222; --dim: #877a5e;
+  --ok: #4d7c0f; --warn: #b45309; --bad: #b91c1c;
+  --grad: linear-gradient(100deg, #8a7048, #c4a878);
+  --glow: none; --scan: transparent; --star: 0;
+  --r: 18px; --r-sm: 12px; --r-xs: 8px; --r-lg: 26px;
+}
+
+/* ── 馬卡龍 ─────────────────────────────────────────── */
+[data-theme='macaron'] {
+  --bg: #fff8fb; --bg-2: #fdf1f6; --surface: #ffffff; --surface-2: #fff5fa;
+  --surface-3: #fde8f2; --border: #fbdce9; --border-hi: #f472b6;
+  --neon: #f472b6; --cyan: #7dd3fc; --pink: #fb923c;
+  --text: #5a4550; --dim: #a98b9a;
+  --ok: #34d399; --warn: #fbbf24; --bad: #fb7185;
+  --grad: linear-gradient(100deg, #f9a8d4, #a5b4fc, #7dd3fc);
+  --glow: 0 6px 20px rgba(244, 114, 182, .18); --scan: transparent; --star: 0;
+  --r: 26px; --r-sm: 18px; --r-xs: 12px; --r-lg: 34px;
+}
+
+/* ── 和風 ───────────────────────────────────────────── */
+[data-theme='wafu'] {
+  --font: 'Noto Serif JP', 'Noto Sans TC', serif;
+  --bg: #f7f4ec; --bg-2: #efe9dc; --surface: #fffdf8; --surface-2: #f4efe3;
+  --surface-3: #efe6d6; --border: #ded3bd; --border-hi: #b03a48;
+  --neon: #b03a48; --cyan: #2f4b4e; --pink: #8c2f39;
+  --text: #2f2a24; --dim: #8a8172;
+  --ok: #4d7c0f; --warn: #b45309; --bad: #991b1b;
+  --grad: linear-gradient(100deg, #b03a48, #2f4b4e);
+  --glow: none; --scan: transparent; --star: 0;
+  --r: 14px; --r-sm: 10px; --r-xs: 7px; --r-lg: 20px;
+}
+
+/* ══════════════════════════════════════════════════════════ */
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body, #root { height: 100%; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 背景氛圍 */
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(ellipse 90% 55% at 50% -10%, color-mix(in srgb, var(--neon) 26%, transparent), transparent 70%),
+    radial-gradient(ellipse 70% 45% at 8% 105%, color-mix(in srgb, var(--cyan) 14%, transparent), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 95% 82%, color-mix(in srgb, var(--pink) 12%, transparent), transparent 70%);
+  opacity: var(--star);
+}
+/* scanline 質感 */
+body::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 1;
+  background: repeating-linear-gradient(0deg, var(--scan) 0 1px, transparent 1px 3px);
+}
+
+input, button, select, textarea { font-family: inherit; font-size: inherit; }
+button { cursor: pointer; border: none; background: none; color: inherit; }
+input { outline: none; }
+
+/* ── App 骨架 ─────────────────────────────────────── */
+.app { position: relative; z-index: 2; min-height: 100%; display: flex; flex-direction: column; }
+/* ⚠️ 四邊都要安全區 —— 橫向嗰陣劉海會喺左右 */
+.screen { flex: 1; max-width: 640px; margin: 0 auto; width: 100%;
+  padding: 14px calc(16px + var(--safe-r)) calc(var(--nav-h) + var(--safe-b) + 18px) calc(16px + var(--safe-l)); }
+.screen.no-nav { padding-bottom: 28px; }
+
+/* ── 通用元件 ─────────────────────────────────────── */
+.h1 { font-size: 22px; font-weight: 900; letter-spacing: -.02em; }
+.h1.pix { font-family: var(--font-pix); font-size: 15px; line-height: 1.7; }
+.sub { font-size: 12.5px; color: var(--dim); margin-top: 4px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.col { display: flex; flex-direction: column; gap: 10px; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 14px;
+}
+.card.glow { border-color: var(--border-hi); box-shadow: var(--glow); }
+.card.tap { cursor: pointer; transition: transform .15s, border-color .2s; }
+.card.tap:active { transform: scale(.985); }
+
+.btn {
+  font-weight: 700; font-size: 13px; padding: 11px 16px; border-radius: var(--r-sm);
+  border: 1px solid var(--border-hi); background: var(--surface-2); color: var(--text);
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  transition: transform .15s, filter .15s;
+}
+.btn:active { transform: scale(.97); }
+.btn.primary { background: var(--grad); border-color: transparent; color: #0b0518; font-weight: 900; box-shadow: var(--glow); }
+[data-theme='minimal'] .btn.primary,
+[data-theme='khaki'] .btn.primary,
+[data-theme='macaron'] .btn.primary,
+[data-theme='wafu'] .btn.primary { color: #fff; }
+.btn.ghost { background: transparent; border-color: var(--border); color: var(--dim); }
+.btn.wide { width: 100%; }
+.btn.sm { padding: 7px 12px; font-size: 11.5px; }
+.btn:disabled { opacity: .45; pointer-events: none; }
+
+.input {
+  width: 100%; padding: 13px 15px; border-radius: var(--r-sm);
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  font-size: 13.5px; transition: border-color .18s, box-shadow .18s;
+}
+.input:focus { border-color: var(--neon); box-shadow: var(--glow); }
+.input::placeholder { color: var(--dim); opacity: .75; }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+  background: var(--surface-3); color: var(--dim); border: 1px solid var(--border);
+}
+.chip.on { background: var(--grad); color: #0b0518; border-color: transparent; }
+.chip.cat { background: transparent; color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 42%, transparent); }
+
+.scroll-x { display: flex; gap: 7px; overflow-x: auto; padding: 2px 16px 8px; margin: 0 -16px; scrollbar-width: none; }
+.scroll-x::-webkit-scrollbar { display: none; }
+.scroll-x .chip { white-space: nowrap; cursor: pointer; }
+
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+.sec { font-size: 11px; font-weight: 900; letter-spacing: .14em; color: var(--cyan);
+  text-transform: uppercase; margin: 20px 0 10px; display: flex; align-items: center; gap: 8px; }
+.sec::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--border), transparent); }
+.dim { color: var(--dim); }
+.mono { font-family: ui-monospace, monospace; }
+
+/* 信心分數 */
+.conf { font-family: var(--font-pix); font-size: 9px; padding: 4px 7px; border-radius: 99px;
+  background: var(--surface-3); color: var(--dim); border: 1px solid var(--border); }
+.conf.hi { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.conf.md { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.conf.lo { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+
+/* item 卡 */
+.item { display: flex; gap: 11px; padding: 11px; border-radius: var(--r-sm);
+  background: var(--surface); border: 1px solid var(--border); margin-bottom: 8px; }
+.item.low { border-style: dashed; border-color: var(--warn); }
+.item .ic { width: 46px; height: 46px; flex: 0 0 46px; border-radius: var(--r-sm);
+  background: linear-gradient(135deg, var(--surface-3), var(--surface-2));
+  display: flex; align-items: center; justify-content: center; font-size: 21px;
+  border: 1px solid var(--border); overflow: hidden; }
+.item .ic img { width: 100%; height: 100%; object-fit: cover; }
+.item .info { flex: 1; min-width: 0; }
+.item .info h4 { font-size: 13.5px; font-weight: 700; margin-bottom: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .info p { font-size: 11px; color: var(--dim); line-height: 1.5; }
+
+/* 空狀態 */
+.empty { text-align: center; padding: 40px 20px; color: var(--dim); font-size: 13px; line-height: 1.9; }
+.empty .big { font-size: 40px; display: block; margin-bottom: 12px; opacity: .5; }
+
+/* 底部 nav */
+.nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  backdrop-filter: blur(16px);
+  padding: 8px calc(4px + var(--safe-r)) calc(8px + var(--safe-b)) calc(4px + var(--safe-l)); }
+.nav button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  color: var(--dim); font-size: 9.5px; font-weight: 700; padding: 5px 0; transition: color .18s; }
+.nav button .i { font-size: 18px; line-height: 1; filter: grayscale(1) opacity(.6); }
+.nav button.on { color: var(--cyan); }
+.nav button.on .i { filter: none; text-shadow: 0 0 10px var(--cyan); }
+.nav .add { flex: 0 0 54px; }
+.nav .add .i { width: 38px; height: 38px; border-radius: 50%; background: var(--grad);
+  color: #0b0518; display: flex; align-items: center; justify-content: center;
+  font-size: 21px; font-weight: 900; box-shadow: var(--glow); filter: none; }
+
+/* toast */
+.toast { position: fixed; left: 50%; bottom: calc(var(--nav-h) + var(--safe-b) + 16px);
+  transform: translate(-50%, 14px); z-index: 90;
+  background: var(--surface-2); border: 1px solid var(--border-hi); color: var(--text);
+  font-size: 12.5px; font-weight: 600; padding: 10px 18px; border-radius: 999px;
+  box-shadow: var(--glow); opacity: 0; pointer-events: none; transition: all .28s;
+  white-space: nowrap; max-width: 90vw; overflow: hidden; text-overflow: ellipsis; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* 登入 */
+.login { min-height: 100%; display: flex; flex-direction: column; justify-content: center;
+  padding: 24px; max-width: 420px; margin: 0 auto; }
+.logo { text-align: center; margin-bottom: 28px; }
+.logo .mark { width: 70px; height: 70px; margin: 0 auto 16px; border-radius: var(--r-ico);
+  background: var(--grad); display: flex; align-items: center; justify-content: center;
+  font-size: 32px; box-shadow: 0 0 34px color-mix(in srgb, var(--neon) 60%, transparent); }
+.logo h1 { font-family: var(--font-pix); font-size: 15px; line-height: 1.7;
+  background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.logo p { color: var(--dim); font-size: 12px; margin-top: 10px; }
+
+/* 地圖 */
+.map { height: 320px; border-radius: var(--r); overflow: hidden;
+  border: 1px solid var(--border-hi); background: var(--surface-3); }
+.map.wide { height: 60vh; min-height: 340px; }
+.leaflet-container { background: var(--surface-3) !important; font-family: var(--font) !important; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background: var(--surface-2) !important; color: var(--text) !important;
+  border: 1px solid var(--border-hi) !important; }
+.leaflet-popup-content { margin: 10px 12px !important; font-size: 12.5px !important; }
+.leaflet-bar a { background: var(--surface-2) !important; color: var(--text) !important;
+  border-color: var(--border) !important; }
+
+/* 行程表 */
+.days { display: flex; gap: 7px; overflow-x: auto; padding: 0 16px 8px; margin: 0 -16px 8px; scrollbar-width: none; }
+.days::-webkit-scrollbar { display: none; }
+.day { flex: 0 0 auto; min-width: 64px; padding: 9px 11px; border-radius: var(--r-sm);
+  border: 1px solid var(--border); background: var(--surface); text-align: center; transition: all .18s; }
+.day .dw { font-size: 9.5px; color: var(--dim); font-weight: 700; }
+.day .dn { font-family: var(--font-pix); font-size: 10px; margin-top: 5px; }
+.day.on { background: var(--grad); border-color: transparent; box-shadow: var(--glow); }
+.day.on .dw, .day.on .dn { color: #0b0518; }
+
+.tl { position: relative; padding-left: 26px; }
+.tl::before { content: ''; position: absolute; left: 7px; top: 8px; bottom: 10px; width: 2px;
+  background: linear-gradient(180deg, var(--neon), var(--cyan), transparent); }
+.slot { position: relative; margin-bottom: 8px; }
+.slot .dot { position: absolute; left: -23px; top: 18px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--neon); box-shadow: var(--glow); border: 2px solid var(--bg); }
+.stop { display: flex; gap: 10px; align-items: center; padding: 11px 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm);
+  cursor: grab; transition: border-color .18s, opacity .18s; }
+.stop:active { cursor: grabbing; opacity: .6; }
+.stop:hover { border-color: var(--border-hi); }
+.stop.dragover { border-color: var(--cyan); border-style: dashed; }
+.stop .d { flex: 1; min-width: 0; }
+.stop .d h4 { font-size: 13px; font-weight: 700; }
+.stop .d p { font-size: 10.5px; color: var(--dim); }
+.stop .grip { color: var(--border-hi); font-size: 14px; letter-spacing: -2px; }
+.slot.empty .dot { background: var(--border); box-shadow: none; }
+.dropzone { border: 1px dashed var(--border); border-radius: var(--r-sm); padding: 15px;
+  text-align: center; color: var(--dim); font-size: 11.5px; transition: all .18s; }
+.dropzone.over { border-color: var(--cyan); color: var(--cyan); background: color-mix(in srgb, var(--cyan) 8%, transparent); }
+
+/* 解析中 */
+.steps { display: flex; flex-direction: column; gap: 6px; font-size: 11.5px; }
+.steps div { display: flex; gap: 7px; color: var(--dim); }
+.steps b { color: var(--cyan); font-weight: 700; }
+
+/* 主題選擇 */
+.themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 9px; }
+.theme-opt { border: 2px solid var(--border); border-radius: var(--r-sm); padding: 11px 9px;
+  text-align: center; font-size: 11px; font-weight: 700; transition: all .18s; }
+.theme-opt.on { border-color: var(--border-hi); box-shadow: var(--glow); }
+.theme-opt .sw { height: 22px; border-radius: var(--r-xs); margin-bottom: 8px; }
+
+/* 星星背景 */
+.stars { position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: var(--star); }
+.stars i { position: absolute; border-radius: 1px; display: block; animation: tw 3.4s ease-in-out infinite; }
+@keyframes tw { 0%,100% { opacity: .15 } 50% { opacity: .9 } }
+
+.spin { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--border-hi);
+  border-top-color: transparent; border-radius: 50%; animation: sp .7s linear infinite; }
+@keyframes sp { to { transform: rotate(360deg) } }
+
+@media (min-width: 720px) {
+  body::before { opacity: calc(var(--star) * 1.2); }
+}
+
+
+/* ══ 開機動畫：閃爍 cursor ══ */
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* ══ 主畫面：app icon 格 ================================ */
+/* ⚠️ 主畫面係「手機 OS」感覺 —— 用 safe-area + 置中，
+      桌面睇嘅時候唔會拉得太闊（模擬手機寬度）。 */
+.app {
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   響應式：唔同手機闊度都要好睇
+   ══════════════════════════════════════════════════════════════
+
+   ⚠️⚠️ 為咩要用 clamp() 而唔係 media query：
+       media query 只可以喺「斷點」跳級 —— 360px 同 430px 之間
+       用同一個 size。但手機闊度係連續變化嘅（320 / 360 / 375 /
+       390 / 414 / 430 …），用 clamp() 可以連續適應。
+
+       實測過嘅手機闊度：
+         320px  iPhone SE (1st gen)
+         360px  大部分 Android
+         375px  iPhone SE2/8
+         390px  iPhone 13/14
+         414px  iPhone 11/XR
+         430px  iPhone 15 Pro Max
+         500px+ 摺機打開 / 平板
+
+   ⚠️ 縮圖用 clamp 而唔係固定 px —— 因為如果固定 46px，
+      喺 320px 嘅機上面，46px 圖 + 11px gap + 22px padding = 79px，
+      剩返 241px 畀文字。喺 430px 嘅機上面縮圖就變成相對太細。
+*/
+
+/* ── 排版：螢幕邊距隨闊度調整（覆蓋上面嘅固定值）──
+   ⚠️ 用 clamp 令邊距連續適應 320–430px，
+      而唔係喺斷點跳級。 */
+.screen {
+  padding: clamp(11px, 3.2vw, 16px)
+           calc(clamp(12px, 4vw, 18px) + var(--safe-r))
+           calc(var(--nav-h) + var(--safe-b) + 18px)
+           calc(clamp(12px, 4vw, 18px) + var(--safe-l));
+}
+
+/* ── 標題 ── */
+.h1 { font-size: clamp(19px, 5.6vw, 23px); }
+
+/* ── 列表項目：圖示格隨闊度縮放 ── */
+.item { gap: clamp(8px, 2.6vw, 12px); padding: clamp(9px, 2.6vw, 12px); }
+.item .ic {
+  width: clamp(42px, 12.5vw, 54px);
+  height: clamp(42px, 12.5vw, 54px);
+  flex: 0 0 clamp(42px, 12.5vw, 54px);
+  font-size: clamp(19px, 5.4vw, 24px);
+}
+.item .info h4 { font-size: clamp(12.5px, 3.5vw, 14px); }
+.item .info p { font-size: clamp(10px, 2.85vw, 11.5px); }
+
+/* ── 按鈕唔好太細（手指要撳得到）── */
+/*   ⚠️ Apple HIG 建議最少 44×44 pt 觸控區 */
+.btn { min-height: 40px; }
+.btn.sm { min-height: 34px; }
+.chip { min-height: 30px; }
+
+/* ── 超窄機（≤360px）：進一步收窄 ── */
+@media (max-width: 360px) {
+  .screen { padding-left: 10px; padding-right: 10px; }
+  .item .ic { border-radius: var(--r-xs); }
+  .card { padding: 11px; }
+  .chips { gap: 5px; }
+  .chip { font-size: 10.5px; padding: 5px 9px; }
+}
+
+/* ── 大機／平板：唔好拉太闊（一行太長好難睇）── */
+@media (min-width: 560px) {
+  .item .ic { width: 54px; height: 54px; flex: 0 0 54px; }
+}
+
+/* ── 橫向：減少垂直空間浪費 ── */
+@media (orientation: landscape) and (max-height: 520px) {
+  .map.wide { height: 74vh; }
+  .boot-pad { padding-top: 12px; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   相片縮圖（購物清單用）
+   ══════════════════════════════════════════════════════════════
+
+   ⚠️⚠️ 用戶要求：
+      「希望可以 show 出嚟個 list 係可以見到佢張相，
+        但係如果你將成張相擺上去嘅話呢個樣就會好樣衰，
+        所以你要調啱好相同埋嗰欄之間嘅比例」
+
+   問題：手機影嘅相通常係 3:4 或 9:16（直向）。
+        直接擺入列表 → 一係拉長成條 row（好樣衰），
+        一係裁到剩中間（睇唔到係咩）。
+
+   做法：
+      · 列表用**正方形縮圖**（object-fit: cover）
+        → 每行高度一致，列表整齊
+      · object-position: center 45%
+        → 影相時主體通常喺中間偏上，唔會裁到主體
+      · 撳縮圖 → **彈全圖**（object-fit: contain）
+        → 想睇清楚就撳，全圖唔會被裁
+*/
+
+/* ══════════════════════════════════════════════════════════════
+   相框（Photo Frame）
+   ══════════════════════════════════════════════════════════════
+
+   ⚠️⚠️ 用戶要求 ④：
+     「shopping list 嗰度呢我係想有一個**框架**，
+      即係例如你 upload 相之後有一個框架咁然後會 show 個相出嚟，
+      就好似你一碌落去你就知道嗰個商品係有乜嘢圖案係點嘅樣，
+      而唔係剩係得個名。」
+
+   ⚠️ 為咩要「框」而唔係單純一張圖：
+     · 超市貨架嘅相通常白底／淺底 —— 冇框就會同淺色主題嘅
+       卡片底融為一體，睇落曚曚
+     · 有框 = 一眼認得出「呢度有一張實物相」，唔會當成裝飾
+     · 一碌落去，圖先入眼、名先入腦 —— 買嘢係認樣唔係認字
+
+   ⚠️ 為咩用**雙層框**（外粗 + 內幼）：
+     單層框睇落似「卡片邊」，雙層似**相框**（有厚度）。
+     呢個係實體相框嘅視覺語言。
+*/
+.thumb {
+  position: relative;
+  flex: 0 0 auto;
+  /* ⚠️ 用 --r-sm（唔係 clamp）—— 圓角已經有統一 scale */
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--surface-3);
+  cursor: pointer;
+  /* ⚠️ 由 52-68px 加到 62-84px ——
+        用戶要「一碌落去就知係咩」，要大啲先認得出圖案 */
+  width: clamp(62px, 18vw, 84px);
+  height: clamp(62px, 18vw, 84px);
+  /* ⚠️⚠️ 相框：外粗邊（3px）+ 內幼邊（1px 淺色） */
+  border: 3px solid var(--border-hi);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .22),   /* 內幼邊 = 相框嘅「內框」 */
+    inset 0 0 14px rgba(0, 0, 0, .35),          /* 內陰影 = 相片嵌咗入去 */
+    0 3px 0 rgba(0, 0, 0, .45);                 /* 硬陰影（像素風） */
+  transition: transform .16s cubic-bezier(.34,1.56,.64,1), border-color .16s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ⚠️ 完成（已買）→ 降低對比，一眼分得出 */
+/*   ⚠️⚠️ 唔可以再用 `.thumb.done::after` 放個 ✓ ——
+       原本 `.thumb::after` 已經用嚟放「⤢ 放大」提示，
+       一個元素得**一個** ::after，後定義嘅會蓋前面。
+       所以用 `::before`。 */
+.thumb.done { opacity: .5; }
+.thumb.done::before {
+  content: '✓';
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; font-weight: 900; color: var(--ok);
+  background: rgba(0, 0, 0, .4);
+}
+.thumb:active { transform: scale(.94); }
+.thumb:hover { border-color: var(--border-hi); }
+.thumb img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  /* ⚠️ 唔用 50% —— 影相主體通常中間偏上（桌面／手上），
+        用 45% 冇咁易裁到主體 */
+  object-position: center 45%;
+  display: block;
+}
+.thumb.done img { filter: grayscale(1) opacity(.65); }
+/* 右下角細細個「放大」提示 */
+.thumb::after {
+  content: '⤢';
+  position: absolute; right: 3px; bottom: 3px;
+  font-size: 9px; line-height: 1;
+  padding: 2px 3px; border-radius: 4px;
+  background: rgba(11,5,24,.72); color: #efeaff;
+  opacity: .85;
+}
+
+/* ══ 全圖檢視（lightbox）══ */
+.lightbox {
+  position: fixed; inset: 0; z-index: 120;
+  background: rgba(4,2,10,.94);
+  backdrop-filter: blur(10px);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: calc(12px + var(--safe-t)) 12px calc(12px + var(--safe-b));
+  animation: lbIn .18s ease;
+}
+@keyframes lbIn { from { opacity: 0 } to { opacity: 1 } }
+.lightbox img {
+  max-width: 100%;
+  max-height: calc(100vh - 150px);
+  /* ⚠️ contain 而唔係 cover —— 全圖唔可以裁 */
+  object-fit: contain;
+  border-radius: 14px;
+  box-shadow: 0 12px 50px rgba(0,0,0,.6);
+}
+.lightbox .lb-cap {
+  margin-top: 16px; text-align: center; max-width: 560px;
+  color: #efeaff; font-size: clamp(12.5px, 3.6vw, 15px); font-weight: 800;
+  line-height: 1.6;
+}
+.lightbox .lb-sub { margin-top: 5px; color: #a99cd0; font-size: 11.5px; }
+.lightbox .lb-x {
+  position: absolute; top: calc(12px + var(--safe-t)); right: 14px;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(255,255,255,.13); color: #efeaff;
+  font-size: 19px; display: flex; align-items: center; justify-content: center;
+  border: none; backdrop-filter: blur(6px);
+}
+
+/* ══ 相片輸入預覽（加相之後）══ */
+.photo-pick {
+  position: relative; width: 46px; height: 46px; flex: 0 0 46px;
+  border-radius: var(--r-sm); overflow: hidden; border: 1px solid var(--border-hi);
+}
+.photo-pick img { width: 100%; height: 100%; object-fit: cover; object-position: center 45%; }
+.photo-pick button {
+  position: absolute; top: -1px; right: -1px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--bad); color: #fff; font-size: 10px; line-height: 1;
+  display: flex; align-items: center; justify-content: center; border: none;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Pixel Art 風格（像素 / 點陣）
+   ══════════════════════════════════════════════════════════════
+
+   ⚠️⚠️ 用戶要求：
+      「Pixel Art（像素藝術 / 點陣圖）… 廣東話通常會叫呢種風格做
+       「Pixel 風」或者「點陣風格」，UI 係呢種嘅風格」
+
+   像素風嘅四條規則（缺一不可）：
+
+     ① **冇圓角**（或者極少）—— 圓角係「現代扁平」嘅語言，
+        同像素格嘅硬邊完全相反
+     ② **硬邊陰影**（box-shadow 唔可以有 blur）
+        ❌ box-shadow: 0 4px 12px rgba(...)   ← 模糊 = 唔係像素
+        ✅ box-shadow: 4px 4px 0 rgba(...)    ← 硬偏移 = 像素
+     ③ **粗邊框**（2-3px 實線）—— 像素圖一定有黑邊
+     ④ **冇漸變模糊／毛玻璃** —— backdrop-filter 同像素風衝突
+
+   ⚠️ 但唔可以走火入魔：
+      · 內文（地址、金額）唔可以用像素字體 —— 像素字體細字好難睇
+      · 觸控區要維持 40px+（見上面響應式部分）
+      · 唔可以為咗風格犧牲對比度
+
+   ⚠️⚠️ 大細一定要用**偶數** px ——
+      奇數 px 嘅邊框同陰影會令格與格之間出現半格偏移。
+*/
+
+:root {
+  --px: 3px;                 /* 像素單位：邊框粗細 */
+  /* ⚠️ --px-r 已經**完全刪除** —— 改用上面嘅 --r-xs/sm/r/lg scale。
+     之前有兩個來源（--r 同 --px-r）令有啲位圓、有啲位方 → 唔一致。 */
+}
+
+/* ── 全域：所有「現代」視覺語言收窄 ── */
+.card {
+  border-radius: var(--r) !important;
+  border-width: var(--px) !important;
+  border-color: var(--border-hi) !important;
+  /* ⚠️ 硬陰影（0 blur） */
+  box-shadow: var(--px) var(--px) 0 rgba(0, 0, 0, .45) !important;
+}
+.card.glow { box-shadow: var(--px) var(--px) 0 color-mix(in srgb, var(--neon) 45%, #000) !important; }
+
+.item {
+  border-radius: var(--r-sm) !important;
+  border-width: 2px !important;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, .35);
+}
+
+.input {
+  border-radius: var(--r-sm) !important;
+  border-width: var(--px) !important;
+  border-color: var(--border-hi) !important;
+  background: var(--surface-3) !important;
+  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, .32) !important;
+}
+.input:focus {
+  border-color: var(--cyan) !important;
+  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, .32),
+              0 0 0 2px color-mix(in srgb, var(--cyan) 40%, transparent) !important;
+}
+
+/* ── 按鈕：硬邊 + 硬陰影 + 撳落去「沉」一格 ── */
+.btn {
+  border-radius: var(--r-sm) !important;
+  border-width: var(--px) !important;
+  box-shadow: var(--px) var(--px) 0 rgba(0, 0, 0, .5);
+  transition: transform .06s steps(2, end), box-shadow .06s steps(2, end);
+  font-weight: 800;
+}
+.btn:active:not(:disabled) {
+  /* ⚠️ 用 steps() 而唔係 ease —— 像素風嘅動態要「跳格」唔要平滑 */
+  transform: translate(var(--px), var(--px));
+  box-shadow: 0 0 0 rgba(0, 0, 0, .5);
+}
+.btn.primary {
+  box-shadow: var(--px) var(--px) 0 color-mix(in srgb, var(--neon) 55%, #000);
+}
+.btn.primary:active:not(:disabled) { box-shadow: 0 0 0; }
+
+.chip {
+  border-radius: var(--r-xs) !important;
+  border-width: 2px !important;
+}
+.chip.on { box-shadow: 2px 2px 0 color-mix(in srgb, var(--cyan) 45%, #000); }
+
+/* ── 標題用像素字體 ── */
+.h1, .logo h1, .sec {
+  font-family: var(--font-pix), var(--font);
+  letter-spacing: .5px;
+}
+.h1 { font-size: clamp(13px, 4.2vw, 17px) !important; line-height: 1.6; }
+.sec {
+  font-size: 9.5px !important;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  opacity: .95;
+}
+
+/* ── 導航：像素格 ── */
+.nav { border-top-width: var(--px); }
+.nav button .i { filter: none !important; opacity: .55; }
+.nav button.on .i { opacity: 1; filter: none !important; text-shadow: none !important; }
+.nav .add .i {
+  border-radius: var(--r-sm) !important;
+  box-shadow: var(--px) var(--px) 0 rgba(0, 0, 0, .5) !important;
+}
+
+/* ── App icon：像素方塊 ── */
+/* ⚠️ 呢個係 .app-ico 嘅**唯一**定義 ——
+   之前有 3 個重複規則散喺唔同位置，改一個唔記得改另一個就出事。 */
+.app-ico {
+  /* ⚠️ 用**百分比** —— iPhone app icon 就係 22.37%，
+     百分比會隨大細自動縮放（唔同 px 會喺細 icon 睇落太圓）。 */
+  border-radius: var(--r-ico) !important;
+  border: var(--px) solid rgba(255, 255, 255, .22);
+  box-shadow: var(--px) var(--px) 0 rgba(0, 0, 0, .5);
+  transition: transform .07s steps(2, end), box-shadow .07s steps(2, end);
+  /* ⚠️ 百分比大細：100% 填滿格，正方形由 aspect-ratio 保證 */
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.app-ico:active {
+  transform: translate(var(--px), var(--px));
+  box-shadow: 0 0 0 rgba(0, 0, 0, .5);
+}
+
+/* ── 縮圖／頭像：方角 ── */
+.thumb, .thumb img, .photo-pick, .photo-pick img,
+.pxi, .avatar {
+  border-radius: var(--r-xs) !important;
+}
+.thumb { border-width: var(--px) !important; box-shadow: 2px 2px 0 rgba(0, 0, 0, .4); }
+
+/* ── Toast：硬邊 ── */
+.toast {
+  /* ⚠️ Toast 用**膠囊** —— 佢係浮起嘅短訊息，膠囊最自然。 */
+  border-radius: var(--r-full) !important;
+  border-width: var(--px) !important;
+  box-shadow: var(--px) var(--px) 0 rgba(0, 0, 0, .55) !important;
+  font-family: var(--font);
+}
+
+/* ── 全圖檢視：方角 ── */
+.lightbox img { border-radius: var(--r) !important; }
+.lightbox .lb-x { border-radius: var(--r-full) !important; border: 2px solid rgba(255,255,255,.3); }
+
+/* ── 漸變：改成「硬色階」（像素風唔用平滑漸變）── */
+/*   ⚠️ 唔可以全部改 —— 大面積硬色階會好刺眼。
+      只喺 app icon 同 logo 用「兩段式」漸變。 */
+.logo .mark {
+  border-radius: var(--r-ico) !important;
+  border: var(--px) solid rgba(255, 255, 255, .3);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, .5) !important;
+  image-rendering: pixelated;
+}
+.logo h1 { font-size: 12px !important; }
+
+/* ── 掃描線（加強 CRT / 點陣感）── */
+/*   ⚠️ 一定要極淡（opacity < 0.06）——
+      太明顯會影響閱讀，尤其係細字。 */
+.app::after {
+  content: '';
+  /* ⚠️ 掃描線係**純視覺**覆蓋層（pointer-events: none）→
+     要喺最上（高過 nav 40、sheet 90、toast 90、lightbox 120）。 */
+  position: fixed; inset: 0; z-index: 500; pointer-events: none;
+  /* ⚠️ 4px 週期（唔係 3px）—— 同星雲嘅 4px 格對齊，
+        3px 會同格線「拍頻」出現摩爾紋。 */
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, .028) 0px,
+    rgba(255, 255, 255, .028) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  mix-blend-mode: overlay;
+}
+@media (prefers-reduced-motion: reduce) { .app::after { display: none } }
+
+/* ── 像素字體 class ── */
+/*   ⚠️⚠️ Press Start 2P **冇中文字** ——
+       中文用佢會出豆腐格（□□□）。
+       所以只可以套用喺純英文／數字（Planner、Money、99+）。 */
+.pix {
+  font-family: var(--font-pix), monospace;
+  letter-spacing: 0;
+  line-height: 1.5;
+}
+
+/* ── 主畫面 app 名 ── */
+/* ── 底部 nav 圖示：全部都係像素圖 ── */
+.nav button .i { display: flex; align-items: center; justify-content: center; }
+
+/* ══════════════════════════════════════════════════════════════
+   新手教學（Onboarding）
+   ══════════════════════════════════════════════════════════════ */
+
+.onb {
+  position: fixed; inset: 0; z-index: 200;
+  /* ⚠️ 用 column + center，個盒自己用 alignSelf 決定喺上定下 */
+  display: flex; flex-direction: column; justify-content: center;
+  align-items: center;
+  padding: 12px 12px calc(12px + var(--safe-b));
+}
+.onb-dim { position: absolute; inset: 0; background: rgba(4, 2, 10, .86); }
+.onb-mask { position: absolute; inset: 0; }
+
+.onb-box {
+  position: relative;
+  width: 100%; max-width: 420px;
+  /* ⚠️ 像素風：硬邊、硬陰影 */
+  background: var(--surface-2);
+  border: var(--px) solid var(--cyan);
+  /* ⚠️ 用 --r-lg（最大）—— 呢個係焦點面板，圓啲會更親切 */
+  border-radius: var(--r-lg);
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, .6);
+  padding: 14px 14px 12px;
+  /* ⚠️⚠️ 用 flex column —— 內容可捲、掣永遠見到 */
+  display: flex; flex-direction: column;
+  max-height: 78vh;
+  min-height: 0;
+}
+
+/* ⚠️⚠️ 用戶報嘅 bug：個掣捲到睇唔到 / 撳唔到。
+   修法：內容區獨立滾動，掣放喺滾動區**外面**。 */
+.onb-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* 捲到落底時留少少位，唔好貼住個掣 */
+  padding-bottom: 4px;
+}
+
+/* ── 吉祥物 ── */
+/*   ⚠️ 用百分比高度而唔係固定 px ——
+     用戶要求：「唔建議用數量，應該用 percentage 表達」
+     角色圖高 = 盒高嘅 22%，任何螢幕比例都自適應。 */
+.onb-mascot {
+  display: flex; justify-content: center;
+  margin-bottom: 3%;
+  flex: 0 0 auto;
+}
+/* ══════════════════════════════════════════════════════════════
+   吉祥物（教學用）
+   ══════════════════════════════════════════════════════════════
+
+   ⚠️⚠️ 由「36×44 程序化像素角色」換成「用戶提供嘅插畫」——
+      所以要改三樣嘢：
+
+        ① 大細：72-108px 太細（插畫嘅細節睇唔到）
+                → 120-200px
+        ② `image-rendering: pixelated` 要**拎走** ——
+           嗰個係為 36×44 嘅低解像像素圖而設；
+           插畫係高解像，用 pixelated 會起格仔。
+        ③ 加 `object-fit: contain` + 陰影 ——
+           角色喺星雲底上面要「浮起」，唔係融埋一齊。
+
+   ⚠️ 用戶提供嘅圖有幾個係「白色部分透明」（AI 去背食咗白西裝）——
+      喺深色星雲底上面睇落似深色衫，**意外地合理**。
+      但換去淺色主題會變淺色衫（都算合理）。
+      想根治就要用**非白背景**重新生成（見 docs/mascot/README.md）。
+*/
+.onb-bubble {
+  display: block;
+  height: clamp(120px, 26vh, 200px);
+  width: auto;
+  /* ⚠️ 唔用 pixelated —— 呢啲係插畫，唔係像素圖 */
+  image-rendering: auto;
+  object-fit: contain;
+  /* ⚠️ 兩層陰影：貼身嘅暗邊 + 遠啲嘅柔光 */
+  filter:
+    drop-shadow(0 2px 0 rgba(0, 0, 0, .55))
+    drop-shadow(0 0 22px rgba(168, 85, 247, .34));
+  animation: onbBob 1.4s steps(2, end) infinite;
+}
+@keyframes onbBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-5px) } }
+@media (prefers-reduced-motion: reduce) { .onb-bubble { animation: none } }
+
+/* ── 文字 ── */
+.onb-title {
+  font-family: var(--font-pix), var(--font);
+  font-size: 12px; line-height: 1.7;
+  text-align: center; margin-bottom: 10px; color: var(--cyan);
+}
+.onb-body {
+  font-size: 12.5px; line-height: 1.9; color: var(--text);
+  text-align: center;
+}
+.onb-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10px; font-weight: 800; color: var(--neon);
+  border: 2px solid var(--border-hi); border-radius: var(--r-xs);
+  padding: 3px 9px; margin: 0 auto 10px;
+}
+.onb { text-align: center; }
+.onb-input {
+  margin-top: 12px; text-align: center;
+  font-size: 16px !important; font-weight: 800;
+}
+
+/* ── 進度條（像素格，唔係平滑條）── */
+.onb-bar {
+  flex: 0 0 auto;
+  height: 10px; margin-top: 10px;
+  background: var(--surface-3);
+  border: 2px solid var(--border-hi);
+  border-radius: var(--r-full);
+  overflow: hidden;
+}
+.onb-bar-fill {
+  height: 100%; background: var(--grad);
+  /* ⚠️ 用 steps 令佢一格格跳，唔係平滑增長 */
+  transition: width .22s steps(6, end);
+}
+
+/* ── 掣 ── */
+.onb-actions {
+  /* ⚠️ flex: 0 0 auto —— 唔可以被壓縮、唔會捲走 */
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 10px;
+}
+.onb-actions .btn { flex: 1; }
+.onb-actions .btn.ghost { flex: 0 0 auto; }
+.onb-count { font-size: 9px; opacity: .6; flex: 0 0 auto; }
+
+.onb-skip {
+  flex: 0 0 auto;
+  display: block; width: 100%; margin-top: 6px;
+  background: none; border: none;
+  color: var(--dim); font-size: 10.5px; text-decoration: underline;
+  cursor: pointer; padding: 6px;
+}
+
+/* ⚠️ 唔需要將 [data-tour] 抬到黑幕上面 ——
+   我哋用 SVG mask 挖窿（黑色矩形 = 透明），
+   目標本身就已經「穿過」個窿睇得到。
+   加 z-index 反而會令目標浮喺提示卡上面。 */
+
+/* ══════════════════════════════════════════════════════════════
+   星雲風格（由參考圖抽出嘅色板）
+   ══════════════════════════════════════════════════════════════
+
+   ⚠️⚠️ 呢批色唔係我估嘅 —— 係用程式由用戶提供嘅參考圖
+      **統計抽出嚟**（見 engine/make_pixelart.py 頂部嘅註解）。
+
+   最 signature 嘅特徵：**紫左／青右嘅邊緣漸變**
+     · 左邊 H≈306-316°（#e73ab8 → #fc53ec）
+     · 右邊 H≈184-196°（#32e4ff → #08d0ea）
+   呢個係模擬舊 CRT 嘅色差（chromatic aberration）。
+*/
+
+:root {
+  --edge-purple: #e73ab8;
+  --edge-purple-hi: #fc53ec;
+  --edge-cyan: #32e4ff;
+  --edge-cyan-hi: #08d0ea;
+  --deep: #000018;
+  --deep-2: #06002a;
+  --gold: #c08040;
+}
+
+/* ── 星雲背景 ── */
+/*   ⚠️⚠️ 一定要**暗** + 加一層深色遮罩 ——
+       星雲本身有亮帶，直接鋪會令文字完全睇唔到。
+       做法：背景圖 opacity .42 + 線性漸變遮罩（上暗下更暗）。 */
+.app::before {
+  content: '';
+  /* ⚠️⚠️ z-index: -1 —— 令所有內容**自然**喺背景上面。
+     原本用 0，然後要加一條 `.app > * { z-index: 2 }` 去推高內容，
+     結果嗰條規則令 nav 同內容變成**同一層**（都係 2）——
+     後者（nav）蓋前者（sheet）→ 用戶見到導航欄壓住彈出嘅表單。
+     -1 就完全唔使搶，疊層自然正確。 */
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image: url('/nebula.png');
+  background-size: cover;
+  background-position: center;
+  opacity: .42;
+  /* ⚠️ 上半暗（畀標題讀）+ 下半更暗（畀內容讀） */
+  -webkit-mask-image: linear-gradient(to bottom,
+    rgba(0,0,0,.85) 0%, rgba(0,0,0,.55) 35%, rgba(0,0,0,.9) 100%);
+  mask-image: linear-gradient(to bottom,
+    rgba(0,0,0,.85) 0%, rgba(0,0,0,.55) 35%, rgba(0,0,0,.9) 100%);
+}
+/* 橫向／桌面用闊版 */
+@media (min-width: 720px) {
+  .app::before { background-image: url('/nebula-wide.png'); opacity: .38; }
+}
+/* ⚠️⚠️ 唔可以寫 `.app > * { z-index: 2 }` ——
+   呢個會令底部 nav 同浮層（sheet / lightbox）變成同一層，
+   之後 DOM 次序決定邊個喺上 → nav 蓋住個 sheet。
+   （用戶截圖就係咁：加開支表單被導航欄劏開兩截）
+
+   用 `.app::before { z-index: -1 }` 就唔使推高任何嘢。 */
+
+/* ── 紫左／青右邊緣漸變（signature）── */
+/*   ⚠️ 用兩層 drop-shadow 做成「色散」——
+       左邊一層紫、右邊一層青。
+       ⚠️ offset 一定要**細**（1px）—— 太大會變重影，睇落似壞咗。 */
+.pxi svg, .onb-mascot svg, .logo .mark svg {
+  filter:
+    drop-shadow(-1px 0 0 var(--edge-purple))
+    drop-shadow(1px 0 0 var(--edge-cyan));
+}
+/* ⚠️ 細圖示（16px 以下）唔加 —— 會令佢哋糊成一團 */
+.pxi[style*="16px"] svg { filter: none; }
+
+/* ── 標題：像素字體 + 漸變色 ── */
+.h1 {
+  background: linear-gradient(100deg, var(--edge-purple-hi), var(--edge-cyan));
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  /* ⚠️ 唔可以用 text-shadow —— 有 background-clip:text 嘅話
+       陰影會蓋喺文字上面，變成一嚿色 */
+}
+
+/* ── 卡片：加返少少星雲透光感 ── */
+.card {
+  background: color-mix(in srgb, var(--surface) 88%, transparent) !important;
+  backdrop-filter: blur(2px);
+}
+/*   ⚠️ 只加 2px blur —— 唔係毛玻璃效果，
+       只係令星雲背景唔會「拮穿」卡片睇落太花。 */
+
+/* ── 暖金點綴（由房間圖抽出）── */
+.badge-gold, .chip.gold {
+  color: var(--gold) !important;
+  border-color: var(--gold) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ⚠️⚠️ 百分比排版（用戶要求）
+   ══════════════════════════════════════════════════════════════
+
+   用戶原話：
+     「因為每部手機啦個電腦嗰個比例唔一樣嘅話，
+      我唔建議你嗰個 Apps 係整到係用數量囉，
+      你應該用 percentage 表達」
+
+   意思：唔好寫死 px 數量，用**相對比例**，
+        咁樣 320px 手機同 1440px 電腦都會自己適應。
+
+   做法：
+     ① 容器用 fr / % 分配
+     ② 子元素用**容器嘅百分比**（width:100% + aspect-ratio）
+     ③ 文字用 clamp(最小, vw, 最大) —— vw 都係比例
+     ④ 唔用「4 欄」呢類固定數量，用 minmax 自動決定
+*/
+
+/* ── App grid：欄數由容器闊度決定，唔寫死 ── */
+.app-grid {
+  display: grid;
+  /* ⚠️⚠️ 純百分比 —— 完全冇 px。
+     22% 係計出嚟嘅：4 欄 × 22% + 3 × gap 1.5% = 92.5% ≤ 100% ✓
+                     5 欄 × 22% + 4 × 1.5%    = 116%   > 100% ✗
+     → 任何手機闊度（320 / 375 / 430）都穩定出 4 欄，
+       而每格嘅**實際 px** 由容器闊度決定（320px 機 = 70px，430px 機 = 94px）。
+     呢個就係用戶要嘅「用 percentage 而唔係數量」。 */
+  grid-template-columns: repeat(auto-fit, minmax(22%, 1fr));
+  gap: 3.5% 1.5%;
+}
+/* ⚠️ 但如果太少 app（例如只有 3 個），auto-fit 會拉到好闊 →
+   用 max-width 限制單格，令佢唔會變形。 */
+.app-grid > * { max-width: 88px; margin: 0 auto; width: 100%; }
+
+/* ── App icon：100% 填滿格，正方形由 aspect-ratio 保證 ── */
+/* ══════════════════════════════════════════════════════════════
+   App 圖示嘅大細同位置
+   ══════════════════════════════════════════════════════════════
+
+   ⚠️⚠️ 之前有個「雙重縮細」bug：
+      · `<PixelIcon size={38}>` → `.pxi` span 係 38px（inline style）
+      · 但 CSS 又寫 `.app-ico .pxi svg { width: 58% }`
+        → svg 變成 38 × 58% = **22px**
+      → 圖示實際只佔瓦片 **33-42%**，細到睇唔清。
+
+   用戶原話：
+     「你個圖可以帶少少帶 1.1 倍至 1.2 倍，
+      同埋要下少少，咁就會好睇好多。」
+
+   修法：
+     ① 大細由 **瓦片嘅百分比** 決定（唔再經 span 嘅 inline px）
+     ② 68% ＝ 58% × 1.17（用戶要嘅 1.1-1.2 倍）
+     ③ 向下移少少 —— 光學置中
+*/
+
+/* ⚠️ 用變數控制大細 —— 方便微調（用戶話 1.1-1.2 倍） */
+:root {
+  --ico-w: 52%;   /* 圖示佔瓦片嘅百分比 */
+  --ico-y: 4%;    /* 向下移（光學置中）*/
+}
+
+/* ① 大細：瓦片嘅 --ico-w */
+/*   ⚠️ 之前實際係 22px（瓦片嘅 33-42%）——
+      因為 `.pxi` span 用 inline px（38px），
+      CSS 再 `svg { width: 58% }` → 38 × 0.58 = 22px。**縮咗兩次**。
+      而家直接由瓦片嘅百分比決定，唔再經 span 嘅 inline px。 */
+.app-ico .pxi {
+  /* ⚠️ 一定要 !important —— PixelIcon 用 inline style 寫死 px */
+  width: var(--ico-w) !important;
+  height: var(--ico-w) !important;
+  /* ② 向下移少少（光學置中）*/
+  /*   ⚠️ 為咩要向下：圖示嘅視覺重心偏上（尤其係有「腳」嘅圖案，
+         例如 Trips 文件夾、Friends 兩個人），
+         幾何置中會睇落「浮起」。移低 4% 就啱。 */
+  transform: translateY(var(--ico-y));
+}
+.app-ico .pxi svg {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+/* ── 卡片／列表：全部用 % padding ── */
+.card { padding: 4% 3.6% !important; }
+.item { padding: 3% !important; }
+
+/* ── 標題同內文：clamp 混合 vw（比例）── */
+.onb-title { font-size: clamp(10px, 3.4vw, 14px); }
+.onb-body  { font-size: clamp(11px, 3.4vw, 13.5px); }
+
+/* ── 統計格：3 欄用 fr（比例）而唔係固定 px ── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2%;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ⚠️ 圓角一致性檢查（唔可以再有「方角」漏低）
+   ══════════════════════════════════════════════════════════════
+
+   用戶原話：
+     「唔好淨係一個長方形，而係真係要有少少嘅弧度。」
+
+   ⚠️⚠️ 為咩要「一致」而唔係逐個靚：
+      混住方角同圓角會令介面睇落**似未做完**——
+      用戶唔會識講「呢度圓嗰度方」，只會覺得「怪」。
+      所以所有**容器級**元素都要用同一套 scale。
+
+   ⚠️ 但以下係**故意**保持細圓角（像素細節）：
+      · `.stars i`      —— 星星點（1px）
+      · `.thumb::after` —— 縮圖角落嘅 ⤢ 標記（4px）
+      · 進度條 / 分隔線 —— 用 99px 做膠囊
+      呢啲係「點」同「線」，唔係「框」，圓角大反而怪。
+*/
+
+/* ── 補漏：所有仲用緊預設方角嘅容器 ── */
+.screen > .card:first-child,
+.empty,
+.login .card {
+  border-radius: var(--r);
+}
+
+/* ── 內層 card（card 入面嘅 card）用小一級 ——
+     唔係嘅話會出現「框中有框同一個圓角」嘅笨重感。 */
+.card .card {
+  border-radius: var(--r-sm);
+}
+.card .card .card {
+  border-radius: var(--r-xs);
+}
+
+/* ── sheet / modal：頂部大圓角（同 iPhone sheet 一樣）── */
+/*   ⚠️ 只圓上面兩隻角 —— 下面貼住螢幕邊，圓咗會露出背景。 */
+.card[style*="var(--r) var(--r) 0 0"] {
+  border-radius: var(--r-lg) var(--r-lg) 0 0 !important;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   App icon 跟主題色調
+   ══════════════════════════════════════════════════════════════
+
+   ⚠️⚠️ 用戶要求 ③：
+     「因為我哋有唔同嘅主題啦，所以 Apps 嘅 icon
+      應該都要跟返類似嗰個對應嘅主題，即係色調可能要改少少。」
+
+   ⚠️ 為咩唔可以照用死色：
+     原本每個 app icon 嘅漸變色係**寫死喺 JS 入面**（`app.grad`）。
+     切去 `minimal`（米白底）或者 `wafu`（和風米色）之後，
+     紫／青／粉嗰啲霓虹色喺淺底上面**刺眼而且唔協調**。
+
+   ⚠️ 做法：
+     每個 app 攞一個「色位」`--app-a` … `--app-g`，
+     由**每個主題自己定義**。CSS 用 `color-mix()` 由單色
+     推出漸變（唔使每個 app 寫兩個色 → 由 42 個值減到 21 個）。
+
+   ⚠️ `color-mix()` 需要 Safari 16.2+ / Chrome 111+。
+      呢個 app 用咗 `color-mix` 其他地方，所以冇額外要求。
+*/
+
+:root {
+  /* galaxy（預設）—— 霓虹 */
+  --app-a: #a855f7;   /* Planner  紫 */
+  --app-b: #22d3ee;   /* Organize 青 */
+  --app-c: #34d399;   /* Money    綠 */
+  --app-d: #f472b6;   /* Shopping 粉 */
+  --app-e: #fbbf24;   /* Zones    琥珀 */
+  --app-f: #818cf8;   /* Map      靛 */
+  --app-g: #fb7185;   /* Friends  玫紅 */
+  --app-n: #64748b;   /* 中性（Settings / Trips）*/
+}
+
+/* ── tech：單色（黑灰白）──
+   ⚠️ 刻意唔用霓虹 —— tech 主題本身係「終端機」，彩色會破壞風格。 */
+[data-theme='tech'] {
+  --app-a: #e4e4e7; --app-b: #d4d4d8; --app-c: #a1a1aa;
+  --app-d: #c4c4cc; --app-e: #f4f4f5; --app-f: #a1a1aa;
+  --app-g: #d4d4d8; --app-n: #52525b;
+}
+
+/* ── minimal：米白底 → 要**深色**先睇得到 ── */
+[data-theme='minimal'] {
+  --app-a: #1c1917; --app-b: #57534e; --app-c: #059669;
+  --app-d: #78716c; --app-e: #d97706; --app-f: #44403c;
+  --app-g: #dc2626; --app-n: #a8a29e;
+}
+
+/* ── khaki：卡其／軍綠 ── */
+[data-theme='khaki'] {
+  --app-a: #8a7048; --app-b: #a98a5c; --app-c: #4d7c0f;
+  --app-d: #7d6a45; --app-e: #b45309; --app-f: #6b5a3a;
+  --app-g: #b91c1c; --app-n: #a89678;
+}
+
+/* ── macaron：馬卡龍（比 galaxy 更淡更甜）── */
+[data-theme='macaron'] {
+  --app-a: #f472b6; --app-b: #7dd3fc; --app-c: #34d399;
+  --app-d: #fb923c; --app-e: #fbbf24; --app-f: #c4b5fd;
+  --app-g: #fb7185; --app-n: #cbd5e1;
+}
+
+/* ── wafu：和風（朱紅／墨綠／米）── */
+[data-theme='wafu'] {
+  --app-a: #b03a48; --app-b: #2f4b4e; --app-c: #4d7c0f;
+  --app-d: #8c2f39; --app-e: #b45309; --app-f: #3f4a52;
+  --app-g: #991b1b; --app-n: #9c9284;
+}
+
+/* ── 色位 → app ── */
+.app-ico[data-app='calendar'] { --c: var(--app-a); }
+.app-ico[data-app='discover'] { --c: var(--app-b); }
+.app-ico[data-app='money']    { --c: var(--app-c); }
+.app-ico[data-app='shopping'] { --c: var(--app-d); }
+.app-ico[data-app='saved']    { --c: var(--app-e); }
+.app-ico[data-app='map']      { --c: var(--app-f); }
+.app-ico[data-app='friends']  { --c: var(--app-g); }
+.app-ico[data-app='settings'] { --c: var(--app-n); }
+
+/* ⚠️ 由**單色**推出漸變 —— 唔使每個 app 寫兩個色。
+   `color-mix(in srgb, var(--c) 62%, white)` = 拉淺 38%。 */
+.app-ico {
+  background: linear-gradient(
+    140deg,
+    color-mix(in srgb, var(--c, var(--app-n)) 62%, white),
+    var(--c, var(--app-n))
+  );
+}
+
+/* ── 圖示本身嘅色調 ──
+   ⚠️ 像素圖示有自己嘅調色板。喺「彩色」主題上面佢冇問題，
+      但喺 tech（單色）同 minimal（淺底）上面會撞。
+      用 CSS filter 統一處理，唔使改圖。 */
+[data-theme='tech'] .app-ico .pxi {
+  /* ⚠️ 灰階 + 提高對比 —— 令白色圖示喺白底 tile 上面睇得到 */
+  filter: grayscale(1) contrast(1.6) brightness(.55);
+}
+[data-theme='minimal'] .app-ico .pxi {
+  /* ⚠️ minimal 嘅 tile 係深色（--app-* 都係深），所以圖示要反白 */
+  filter: brightness(0) invert(1);
+}
+[data-theme='khaki'] .app-ico .pxi,
+[data-theme='wafu'] .app-ico .pxi {
+  /* ⚠️ 和風／卡其：降低飽和度，貼近米色系 */
+  filter: saturate(.62) contrast(1.05);
+}
+
+/* ⚠️ 空相框 —— 未影相都要有個框（提示你影） */
+.thumb.empty {
+  border-style: dashed;
+  border-color: var(--border);
+  box-shadow: none;
+  background: var(--surface-2);
+}
+.thumb-ph {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%;
+  font-size: clamp(20px, 6vw, 27px);
+  opacity: .38;
+}
+/* ⚠️ 空框唔應該出「⤢ 放大」提示（冇嘢放大） */
+.thumb.empty::after { display: none; }
+
+/* ⚠️⚠️ 大相框（詳情／編輯頁）
+     用戶要求：「upload 相之後有一個框架咁然後會 show 個相出嚟」
+     縮圖太細認唔到圖案 —— 編輯嗰陣要大張。 */
+.frame-lg {
+  position: relative;
+  width: 100%;
+  /* ⚠️ 用 aspect-ratio 而唔係固定高度 —— 唔同機款都夠大 */
+  aspect-ratio: 4 / 3;
+  max-height: 42vh;
+  border-radius: var(--r);
+  overflow: hidden;
+  background: var(--surface-2);
+  /* ⚠️ 同細相框一樣嘅**雙層框**語言 */
+  border: 3px solid var(--border-hi);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .18),
+    inset 0 0 22px rgba(0, 0, 0, .4),
+    0 3px 0 rgba(0, 0, 0, .45);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.frame-lg img {
+  width: 100%; height: 100%;
+  /* ⚠️ contain 而唔係 cover —— 編輯頁要**睇齊全張相**，
+        唔可以裁走（縮圖先用 cover） */
+  object-fit: contain;
+  background: var(--surface-3);
+  display: block;
+}
+.frame-lg .thumb-ph { font-size: 13px; opacity: .5; }
+
+/* ⚠️ 加相嘅預覽都要係「框」而唔係一粒縮圖 */
+.photo-pick {
+  position: relative;
+  width: clamp(62px, 18vw, 84px); height: clamp(62px, 18vw, 84px);
+  flex: 0 0 auto;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border: 3px solid var(--border-hi);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2), 0 3px 0 rgba(0, 0, 0, .45);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   密碼欄 + 眼仔
+   ══════════════════════════════════════════════════════════════
+
+   ⚠️⚠️ 用戶要求：
+     「設定密碼嗰個應該係隔離正常係會有一個眼仔，
+      俾你去睇個密碼係咪正確？撳一下就會 show，
+      再撳多一下就會唔 show。」
+
+   ⚠️ 為咩要用 wrapper（而唔係喺 input 入面加個掣）：
+     `<input>` 係**替換元素**，唔可以包含子元素 ——
+     所以個掣一定要係兄弟元素，用絕對定位疊上去。
+*/
+.pw-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+/* ⚠️ 右邊要留位畀眼仔，否則文字會打喺個掣下面 */
+.pw-input {
+  width: 100%;
+  padding-right: 46px !important;
+}
+
+.pw-eye {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  /* ⚠️ 44px 係最低可觸控大細（Apple HIG）——
+        細過呢個，手指好易撳唔中。 */
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-xs);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: .68;
+  transition: opacity .12s, background .12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.pw-eye:hover { opacity: 1; background: rgba(255, 255, 255, .07); }
+.pw-eye:active { transform: translateY(-50%) scale(.9); }
+.pw-eye:disabled { opacity: .3; cursor: default; }
+
+/* ══════════════════════════════════════════════════════════════
+   邀請碼一欄（窄欄 + 「驗證」掣）
+   ══════════════════════════════════════════════════════════════
+
+   ⚠️⚠️ 用戶要求：
+     「你真係要搞邀請碼個位，應該係一欄 —— 寫邀請碼嗰欄
+      應該係冇咁闊，然後旁邊落返一個掣叫做『驗證』。」
+
+   ⚠️ 為咩唔用成行闊度：
+     · 6 個字嘅碼用成行 → 睇落似「要打好多嘢」，嚇親人
+     · 而且要將視線由左掃到右先撳到掣 → 手機一隻手好難
+     · 窄欄 + 掣貼住 → 打完即刻撳，一氣呵成
+
+   ⚠️ 為咩唔用 `flex: 1` 喺輸入框：
+     佢會撐到滿 —— `width` 固定 + `flex: 0 0 auto` 先窄得到。
+*/
+.invite-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.invite-input {
+  /* ⚠️ 6 個字 × 字距 ≈ 118px；留多少少位畀光標 */
+  flex: 0 0 auto;
+  width: 132px;
+  text-align: center;
+  letter-spacing: 4px;
+  font-weight: 800;
+  font-size: 15px;
+  padding-left: 10px;
+  padding-right: 4px;      /* ⚠️ 字距會令右邊多咗空位 */
+  text-transform: uppercase;
+}
+
+.invite-btn {
+  flex: 1;                 /* ⚠️ 掣食晒剩低嘅位 → 大手位好撳 */
+  min-width: 88px;
+  font-weight: 800;
+}
+
+/* ⚠️ 窄機（320px）：再收窄啲，唔好逼爆 */
+@media (max-width: 360px) {
+  .invite-input { width: 112px; letter-spacing: 3px; font-size: 14px; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   收藏（Saved）嘅搜尋欄
+   ══════════════════════════════════════════════════════════════
+
+   ⚠️⚠️ 用戶要求：
+     「入面有一個 list 寫係你 saved 嘅景，仲可以上面有一個
+      bar for searching。」
+
+   ⚠️ 為咩唔直接用 `.input`：
+     `.input` 係「一格一格」嘅表單風格（有硬邊框、有 padding）。
+     搜尋欄要有**圖示 + 清除掣**喺左右，所以要用 flex row。
+*/
+.saved-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  margin-bottom: 12px;
+  background: var(--surface-2);
+  border: 2px solid var(--border-hi);
+  border-radius: var(--r-full);       /* ⚠️ 搜尋欄用膠囊最自然 */
+  min-height: 44px;                   /* ⚠️ 44px = 最低可觸控大細 */
+}
+.saved-search:focus-within {
+  border-color: var(--neon);
+}
+.saved-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  padding: 10px 0;
+}
+.saved-input::placeholder { color: var(--dim); }
+.saved-clear {
+  flex: 0 0 auto;
+  width: 26px; height: 26px;
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  color: var(--dim);
+  font-size: 12px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  border: none; cursor: pointer;
+}
+.saved-clear:active { transform: scale(.9); }

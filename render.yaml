@@ -1,0 +1,20 @@
+# ⚠️ Render 部署設定（免費層：會瞓，15 分鐘冇人用就停）
+#
+#   用法：push 上 GitHub → Render → New → Blueprint → 揀呢個 repo
+services:
+  - type: web
+    name: wander
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: WANDER_PORT
+        value: "8787"
+      # ⚠️⚠️ 免費層冇 persistent disk →
+      #    每次 deploy / 重啟都會**清空資料庫**。
+      #    要認真的話要升做付費（US$7/月）加 disk。
+      - key: WANDER_SIGNUP_MODE
+        value: invite
+      - key: WANDER_ADMIN_EMAILS
+        sync: false          # ⚠️ 喺 Render 介面自己填（唔好 commit）

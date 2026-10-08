@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wander · Caption 解析引擎</title>
+<style>
+:root{
+  --bg:#070310; --panel:#0f0722; --panel-2:#160d2e; --panel-3:#1d1140;
+  --border:#33215f; --border-hi:#7c3aed;
+  --neon:#a855f7; --cyan:#22d3ee; --pink:#f472b6;
+  --text:#ece7ff; --dim:#9486bd;
+  --ok:#34d399; --warn:#fbbf24; --bad:#f87171;
+  --grad:linear-gradient(100deg,#a855f7,#22d3ee);
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --sans:'Noto Sans TC',-apple-system,system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:var(--sans);background:var(--bg);color:var(--text);
+  min-height:100vh;padding:26px 18px 70px;line-height:1.6;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -8%, rgba(124,58,237,.26), transparent 72%),
+    radial-gradient(ellipse 60% 40% at 92% 96%, rgba(34,211,238,.11), transparent 70%);
+}
+.wrap{max-width:1080px;margin:0 auto}
+.head h1{font:700 22px/1.4 var(--sans);letter-spacing:-.02em;
+  background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.head p{color:var(--dim);font-size:13px;margin-top:8px}
+.head .tag{display:inline-block;font:700 10px/1 var(--mono);letter-spacing:.1em;
+  color:var(--cyan);border:1px solid rgba(34,211,238,.4);border-radius:99px;
+  padding:5px 11px;margin-bottom:12px;text-transform:uppercase}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:7px;margin:18px 0 12px}
+.tb{font-size:11.5px;font-weight:700;padding:8px 13px;border-radius:99px;cursor:pointer;
+  border:1px solid var(--border);background:var(--panel);color:var(--dim);transition:.18s;
+  font-family:var(--sans)}
+.tb:hover{border-color:var(--border-hi);color:var(--text)}
+.tb b{color:var(--cyan);margin-right:4px}
+.tb.on{background:var(--panel-3);border-color:var(--border-hi);color:var(--text)}
+
+textarea{
+  width:100%;min-height:170px;font-family:var(--sans);font-size:13px;line-height:1.8;
+  padding:15px 16px;border-radius:13px;border:1px solid var(--border);
+  background:var(--panel);color:var(--text);outline:none;resize:vertical;transition:.18s;
+}
+textarea:focus{border-color:var(--neon);box-shadow:0 0 16px rgba(168,85,247,.4)}
+textarea::placeholder{color:#6b5c96}
+
+.actions{display:flex;gap:9px;margin:12px 0 20px;flex-wrap:wrap;align-items:center}
+button.go{font-family:var(--sans);font-weight:800;font-size:13.5px;cursor:pointer;
+  padding:13px 26px;border-radius:11px;border:none;background:var(--grad);
+  color:#0b0518;box-shadow:0 0 18px rgba(168,85,247,.45);transition:.18s}
+button.go:active{transform:scale(.97)}
+button.clear{font-family:var(--sans);font-size:12.5px;font-weight:700;cursor:pointer;
+  padding:13px 20px;border-radius:11px;border:1px solid var(--border);
+  background:transparent;color:var(--dim);transition:.18s}
+button.clear:hover{border-color:var(--border-hi);color:var(--text)}
+.hintline{font-size:11.5px;color:var(--dim)}
+
+.cols{display:grid;grid-template-columns:0.95fr 1.05fr;gap:16px;align-items:start}
+@media(max-width:880px){.cols{grid-template-columns:1fr}}
+
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.card.glow{border-color:var(--border-hi);box-shadow:0 0 26px rgba(124,58,237,.26)}
+.card-h{padding:13px 16px;border-bottom:1px solid var(--border);background:var(--panel-2);
+  display:flex;align-items:center;justify-content:space-between;gap:10px}
+.card-h h2{font-size:12.5px;font-weight:800;letter-spacing:.03em}
+.badge{font-family:var(--mono);font-size:10px;font-weight:700;padding:4px 9px;
+  border-radius:99px;background:var(--panel-3);color:var(--dim);border:1px solid var(--border)}
+.card-b{padding:15px}
+
+/* 抽取到嘅欄位 */
+.field{display:flex;gap:12px;padding:11px 0;border-bottom:1px dashed rgba(51,33,95,.75);
+  animation:slide .3s ease both}
+.field:last-child{border-bottom:none}
+@keyframes slide{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+.field .ic{flex:0 0 26px;height:26px;border-radius:7px;background:var(--panel-3);
+  border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px}
+.field .mid{flex:1;min-width:0}
+.field .lb{font-size:10.5px;color:var(--dim);font-weight:800;letter-spacing:.05em;
+  text-transform:uppercase;margin-bottom:3px}
+.field .vl{font-size:13.5px;font-weight:600;word-break:break-word}
+.field .vl.empty{color:#5b4b85;font-weight:400;font-style:italic}
+.field .vl .sub{display:block;font-size:11.5px;color:var(--dim);font-weight:400;margin-top:3px}
+.field .cf{flex:0 0 auto;font-family:var(--mono);font-size:10px;font-weight:700;
+  padding:3px 7px;border-radius:5px;height:fit-content}
+.cf.hi{background:rgba(52,211,153,.15);color:var(--ok)}
+.cf.md{background:rgba(251,191,36,.15);color:var(--warn)}
+.cf.lo{background:rgba(248,113,113,.15);color:var(--bad)}
+.cf.na{background:var(--panel-3);color:#5b4b85}
+
+/* 標籤 */
+.tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.tg{font-size:10.5px;padding:3px 8px;border-radius:99px;background:var(--panel-3);
+  color:var(--cyan);border:1px solid rgba(34,211,238,.28);font-family:var(--mono)}
+.tg.cat{color:var(--pink);border-color:rgba(244,114,182,.35);font-family:var(--sans);font-weight:700}
+
+/* JSON */
+pre.out{font-family:var(--mono);font-size:11px;line-height:1.7;background:#05020c;
+  border:1px solid var(--border);border-radius:11px;padding:14px;overflow-x:auto;
+  white-space:pre;max-height:340px}
+/* 信心拆解 */
+.wrow{display:grid;grid-template-columns:78px 1fr 46px;gap:9px;align-items:center;
+  padding:5px 0;font-size:11px}
+.wrow .wn{color:var(--dim);font-weight:700}
+.wrow .wt{height:5px;background:var(--panel-3);border-radius:99px;overflow:hidden}
+.wrow .wt i{display:block;height:100%;border-radius:99px;
+  background:var(--grad);transition:width .5s ease}
+.wrow .wv{font-family:var(--mono);font-size:10px;color:var(--text);text-align:right}
+.wrow.zero{opacity:.42}
+.wsum{display:flex;justify-content:space-between;align-items:center;margin-top:11px;
+  padding-top:11px;border-top:1px solid var(--border);font-size:12px}
+.wsum b{font-family:var(--mono);font-size:16px}
+.k{color:var(--pink)} .s{color:var(--ok)} .num{color:var(--cyan)}
+.nul{color:#6b5c85;font-style:italic} .bool{color:var(--warn)}
+
+/* 命中規則 */
+.rule{display:flex;gap:9px;padding:8px 0;border-bottom:1px dashed rgba(51,33,95,.6);
+  font-size:11.5px;align-items:flex-start}
+.rule:last-child{border-bottom:none}
+.rule .rk{flex:0 0 auto;font-family:var(--mono);font-size:10px;font-weight:700;
+  padding:2px 6px;border-radius:4px;background:var(--panel-3);color:var(--cyan);margin-top:2px}
+.rule .rt{flex:1;min-width:0;color:var(--dim)}
+.rule .rt b{color:var(--text);font-family:var(--mono);font-size:11px;word-break:break-all}
+.rule .rt code{font-family:var(--mono);font-size:10.5px;color:var(--cyan);
+  background:var(--panel-3);padding:1px 5px;border-radius:3px;word-break:break-all}
+
+.sec-title{font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--cyan);
+  text-transform:uppercase;margin:20px 0 9px;display:flex;align-items:center;gap:8px}
+.sec-title::after{content:'';flex:1;height:1px;
+  background:linear-gradient(90deg,var(--border),transparent)}
+
+.note{margin-top:22px;padding:15px;border:1px dashed var(--border-hi);border-radius:12px;
+  font-size:12.5px;color:var(--dim);line-height:1.85}
+.note b{color:var(--text)}
+.note code{font-family:var(--mono);font-size:11.5px;background:var(--panel-3);
+  color:var(--cyan);padding:2px 6px;border-radius:4px}
+.foot{margin-top:26px;text-align:center;font-size:11px;color:#5b4b85;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <div class="tag">Caption Parser v0.2</div>
+    <h1>文字解析引擎 · 用戶貼 caption 就抽到嘢</h1>
+    <p>呢個係解決 IG / 小紅書嘅<b>主力方案</b>：叫用戶 copy caption 貼入嚟，零成本、零法律風險、資料量最大。</p>
+  </div>
+
+  <div class="toolbar" id="presets"></div>
+
+  <textarea id="cap" placeholder="貼 IG / 小紅書 caption 落嚟…&#10;&#10;（或者撳上面嘅範例）"></textarea>
+
+  <div class="actions">
+    <button class="go" onclick="run()">解析文字</button>
+    <button class="clear" onclick="document.getElementById('cap').value='';run()">清空</button>
+    <span class="hintline">純前端即時解析 · 真嘅規則引擎</span>
+  </div>
+
+  <div class="cols">
+    <div>
+      <div class="card">
+        <div class="card-h">
+          <h2>▸ 抽取到嘅欄位</h2>
+          <span class="badge" id="overall">—</span>
+        </div>
+        <div class="card-b" id="fields">
+          <p style="color:var(--dim);font-size:12.5px">貼文字或者撳範例開始。</p>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-h"><h2>▸ 命中嘅規則</h2><span class="badge" id="ruleCount">0 條</span></div>
+        <div class="card-b" id="rules"><p style="color:var(--dim);font-size:12.5px">—</p></div>
+      </div>
+    </div>
+
+    <div class="card glow">
+      <div class="card-h">
+        <h2>▸ 標準化 item</h2>
+        <span class="badge" id="confBadge">confidence —</span>
+      </div>
+      <div class="card-b">
+        <pre class="out" id="out">// 同 link parser 輸出同一個格式</pre>
+        <div class="sec-title" style="margin-top:16px">信心分數點計</div>
+        <div id="weights"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>由你真實 caption 得出嘅 3 個重要結論：</b><br><br>
+    ① <b>Caption 係最強來源</b> —— 你嗰兩段字有齊店名、完整地址、日期、時間、菜式。比 Google Maps 仲多資料（Maps 冇圖冇內文）。<br>
+    ② <b>要分「實際位置」同「品牌來源」</b> —— 「長岡<b>博多</b>天婦羅」實際喺<b>銅鑼灣</b>。如果傻更更見到「博多」就歸類福岡，你朋友去到銅鑼灣撲空。呢個 bug 一定要避。<br>
+    ③ <b>日文地址要識拆</b> —— <code>〒823-0003 福岡縣宮若市本城65-1</code> → 郵區 <code>823-0003</code>、縣 <code>福岡縣</code>、市 <code>宮若市</code>、町名番地 <code>本城65-1</code>，可以直接餵去地圖 API 轉座標。<br><br>
+    ⚠️ 而家嘅規則是<b>手寫 rule-based</b>（正則 + 詞典）。咁做解釋性好、免費、快。之後可以加 LLM 做 fallback 處理規則 miss 嘅情況。
+  </div>
+
+  <div class="foot">Wander · 免費版 · Caption 解析規格</div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   範例
+   ══════════════════════════════════════════════════════════ */
+const PRESETS = [
+{ name:'① 彼岸花季（福岡宮若市）', text:`曲「蔓珠沙華」大家都已熟能詳，
+大家可知道「蔓珠沙華」在日本又名為「彼岸花」。
+在秋分前後七天，
+是為日本傳統祭祖的佛教節日「彼岸節」，
+「彼岸花」也在此時長花ー「花開時不長葉，葉長時花就凋謝」，
+富有生生不息的象徵意義。
+迎接「宮若市」市成立20年，「犬鳴川綠之協會」30周年，
+每年除了提供夜間點燈觀賞外，
+在10月初更續辦去年大受好評的「放天燈（ランタンリリース），
+同場加映，
+「最推！彼岸花的照片和影片比賽（推し撮りinヒガンバナ）」等一連串活動。
+不要錯過一年一度觀30萬朵「紅海」與天燈交織的夢幻風景嘍！
+🔸地址：〒823-0003　福岡縣宮若市本城65-1　犬鳴川河川公園
+🔸日期：一般觀賞 9月中至10月初
+晚間點燈 9月24日至10月8日
+「彼岸花祭2026」10月4日
+🔸營業時間：「彼岸花祭2026」下午3時至晚上8時
+🔸天燈預約：1.在LINE APP （請掃QR CODE）把宮若市加為好友＞
+2.在頁面下方按電子申請（教室活動（教室イベント））＞
+　　　　　　3.向右掃一下按（天燈申請（ランタン申込））＞
+　　　　　　4.填寫資料
+＊1SET＝1個，請預約所需個數＊`},
+
+{ name:'② 長岡博多天婦羅（銅鑼灣）', text:`【開幕快將滿一年！座落銅鑼灣正宗〖#長岡博多天婦羅〗🍤】
+正宗鮮製現炸天婦羅在哪吃？
+在 #銅鑼灣利園 就吃得到，
+從 #福岡 漂洋過海來的 #休閒式天婦羅店 ー長岡博多天婦羅（ #天ぷらながおか）。
+午市提供廚師發辦或精選午餐選擇，
+晚市則提供廚師發辦或A la Carte。
+
+精選午餐中的雜錦天婦羅，
+視付季節的材料而變化，
+可包含如大蝦，白身魚，魷魚等海鮮，
+肉類或各種蔬菜如茄子，蕃薯，冬菇，西蘭花等。
+既然稱得上是〖博多天婦羅〗，
+天婦羅的用料也大多從日本空運到港，
+如天然蕃薯的糯甜是源於用了熟成的九州產蕃薯。
+烏冬內更有流心醬油漬天婦羅蛋🥚，
+口感如啫喱狀，甜甜鹹鹹很好配。
+
+午餐亦附有沙拉，前菜如鴨胸和日本小菜，
+味噌湯（如選定食），甜品如蕨餅，及飲品。
+香港店更秉承日本主店配方的招牌特飲，
+浸泡檸檬皮來調製各種特色飲品如炭酸或燒酎。
+肉眼可見足足有約一個檸檬的量！🍋
+
+除了天婦羅，
+亦有鯛魚茶漬飯配天婦羅，吉列豬扒定食，A4和牛丼等可供選擇。
+以木包圍的裝潢休閒舒`},
+
+{ name:'③ 小紅書風格（首爾）', text:`首爾聖水洞必去！☕
+呢間 cafe 真係靚到喊
+📍地址：서울 성동구 연무장길 47
+🚇 2號線聖水站 3號出口行 5 分鐘
+🕐 11:00 - 22:00（逢星期一休息）
+💰 人均 ₩12,000
+招牌：croffle + iced latte
+#首爾 #聖水洞 #cafe #韓國旅行`},
+
+{ name:'④ 日文blog風格（大阪）', text:`大阪・道頓堀で外せないたこ焼きの名店
+「本家大たこ 道頓堀店」
+住所：〒542-0071 大阪府大阪市中央区道頓堀1-5-10
+電話：06-6211-XXXX
+営業時間：10:00〜23:00（年中無休）
+予算：500〜1,000円
+ミシュラン掲載店`},
+];
+
+/* ══════════════════════════════════════════════════════════
+   詞典
+   ══════════════════════════════════════════════════════════ */
+const DISTRICTS = {
+  '福岡縣':['福岡市','北九州市','久留米市','宮若市','太宰府市','糸島市','宗像市','春日市','大野城市','柳川市','飯塚市','直方市','田川市'],
+  '福岡市':['博多区','中央区','早良区','城南区','南区','西区','東区','博多','天神','中洲','大濠','薬院','住吉','祇園','呉服町','箱崎','姪浜','西新','能古島'],
+  '其他日本':['難波','心齋橋','梅田','道頓堀','新宿','渋谷','銀座','浅草','秋葉原','池袋','京都','神戸','名古屋','札幌','沖縄'],
+  '香港':['銅鑼灣','灣仔','中環','尖沙咀','旺角','深水埗','觀塘','荃灣','沙田','元朗','屯門','葵涌','將軍澳','西貢','赤柱','淺水灣','利園','北角','鰂魚涌','跑馬地','天后','佐敦','油麻地','太子','荔枝角','大埔','上水','粉嶺','離島'],
+  '韓國':['弘大','明洞','江南','梨泰院','聖水洞','聖水','東大門','新村','狎鷗亭','建大','蠶室','三清洞','北村'],
+};
+const COUNTRY_HINT = {
+  '福岡縣':'日本','福岡市':'日本','其他日本':'日本','韓國':'韓國','香港':'香港',
+};
+// 設施／店舖後綴（真名通常含呢啲字）
+const FACILITY = ['公園','神社','神宮','大社','寺','城','溫泉','美術館','博物館','動物園','水族館','展望台',
+  'タワー','城跡','キャナル','駅','市場','商店街','橫丁','横丁','河川','園','館','劇場','球場','競技場',
+  '大樓','酒店','飯店','旅館','ホテル','中心','センター','プラザ','モール'];
+// 天婦羅店名提示
+const NAME_HINT = ['店','軒','屋','餐廳','食堂','cafe','カフェ','咖啡','天婦羅','天ぷら','拉麵','ラーメン','壽司','寿司',
+  '燒肉','焼肉','居酒屋','麵','飯','食堂','bar','寿司','たこ焼き','うどん'];
+// ⚠️ 唔可以當店名嘅通用詞（避免抽出「cafe」「拉麵」呢啲廢答案）
+const GENERIC_NAME = ['cafe','咖啡','coffee','カフェ','拉麵','ラーメン','ramen','壽司','寿司','sushi','燒肉','焼肉',
+  '天婦羅','天ぷら','居酒屋','食堂','餐廳','美食','甜點','スイーツ','購物','商場','酒店','ホテル','景點','必去',
+  '推介','推薦','美食','旅行','旅遊','行程','日本','韓國','香港','台北','東京','大阪','福岡'];
+const isGenericName = s => {
+  const t=(s||'').trim();
+  if(!t || t.length<2) return true;
+  if(GENERIC_NAME.some(g=>t===g)) return true;
+  return false;
+};
+
+const CAT_RULES = [
+  {key:'food',     why:'拉麵',   w:['ラーメン','拉麵','らーめん','ramen','豚骨']},
+  {key:'food',     why:'天婦羅', w:['天婦羅','天ぷら','tempura','天麩羅']},
+  {key:'food',     why:'燒肉',   w:['焼肉','燒肉','yakiniku','和牛','A4','A5']},
+  {key:'food',     why:'壽司',   w:['寿司','すし','壽司','sushi','刺身']},
+  {key:'food',     why:'咖啡',   w:['カフェ','咖啡','cafe','coffee','喫茶','latte','croffle']},
+  {key:'food',     why:'居酒屋', w:['居酒屋','izakaya','串焼','飲み']},
+  {key:'food',     why:'甜品',   w:['スイーツ','甜品','パフェ','ケーキ','蕨餅','dessert']},
+  {key:'food',     why:'烏冬',   w:['烏冬','うどん','udon']},
+  {key:'food',     why:'小食',   w:['たこ焼き','章魚燒','たい焼き','小食','B級グルメ']},
+  {key:'food',     why:'定食',   w:['定食','丼','茶漬飯','豬扒']},
+  {key:'shopping', why:'藥妝',   w:['薬','ドラッグ','藥妝','松本清','ドン・キホーテ','唐吉']},
+  {key:'shopping', why:'百貨',   w:['百貨','デパート','department','阪急','三越','parco','利園','SOGO']},
+  {key:'shopping', why:'商場',   w:['商城','商場','mall','購物','運河城','キャナル','モール']},
+  {key:'shopping', why:'超市',   w:['スーパー','超市','市場']},
+  {key:'play',     why:'神社寺廟',w:['神社','神宮','寺','大社','temple','shrine','天滿宮']},
+  {key:'play',     why:'花季祭典',w:['彼岸花','ヒガンバナ','曼珠沙華','蔓珠沙華','紅葉','桜','花見','花火','紫陽花','芝桜']},
+  {key:'play',     why:'祭典活動',w:['祭','ランタン','天燈','點燈','イルミ','イルミネーション','マルシェ','縁日']},
+  {key:'play',     why:'公園',   w:['公園','park','庭園','綠地']},
+  {key:'play',     why:'展望台', w:['展望','タワー','tower','夜景']},
+  {key:'play',     why:'溫泉',   w:['温泉','onsen','銭湯','風呂']},
+  {key:'play',     why:'美術館', w:['美術館','museum','博物館','アート']},
+  {key:'play',     why:'水族館', w:['水族館','動物園','aquarium','zoo']},
+  {key:'stay',     why:'酒店',   w:['ホテル','hotel','旅館','宿','ryokan','民宿']},
+];
+
+/* ══════════════════════════════════════════════════════════
+   工具
+   ══════════════════════════════════════════════════════════ */
+function getRules(used){
+  return used.map(u=>({rule:u.rule, match:u.match, note:u.note}));
+}
+
+/* 全形數字 → 半形，日文漢數字 → 阿拉伯 */
+const JP_NUM={'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10,'〇':0,'零':0};
+function normNum(s){
+  return s.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+          .replace(/[一二三四五六七八九十〇零]/g,c=>String(JP_NUM[c] ?? c));
+}
+function norm(s){
+  return normNum(s)
+    .replace(/[Ａ-Ｚａ-ｚ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+    .replace(/　/g,' ')
+    .replace(/[～~〜]/g,'至');
+}
+/* 地名匹配：回傳最早出現、且最長嘅地區名 */
+function matchRegion(text, words){
+  let best=null;
+  words.forEach(w=>{
+    const i=text.indexOf(w);
+    if(i<0) return;
+    if(!best || i<best.i || (i===best.i && w.length>best.w.length)) best={w,i};
+  });
+  if(!best) return null;
+  // 由命中位置抽一小段窗（避免成句宣傳文案變成「地址」）
+  let seg = text.slice(best.i, best.i + best.w.length + 12);
+  seg = seg.split(/[，,。！!？?、；;｜|（(【〖\n]/)[0].trim();
+  return {word:best.w, seg, index:best.i};
+}
+/* 由地址字串純抽「尾巴」＝番地 */
+function tailAddress(a){
+  const only = a.replace(/[（）()「」【】〖〗]/g,' ');
+  const parts = only.split(/[\s　]+/).filter(Boolean);
+  if(parts.length<2) return '';
+  const last = parts[parts.length-1];
+  // 番地特徵：含數字 + 番/号/丁目/－/-/之
+  if(/\d/.test(last) && /[0-9０-９番号丁目之\-ー–－]/.test(last)) return last;
+  return '';
+}
+/* 場地名：（…）／〖…〗／「…」入面，或者句尾常見場地詞 */
+function venueFromAddress(addr){
+  if(!addr) return null;
+  const parts = addr.split(/[\s　]+/).filter(Boolean);
+  for(let i=parts.length-1;i>=0;i--){
+    const p = parts[i].replace(/[（）()「」【】〖〗]/g,'').trim();
+    if(!p) continue;
+    if(/\d/.test(p)) continue;                       // 跳過番地
+    if(FACILITY.some(f=>p.includes(f)) && p.length>=3){
+      return {name:p, how:'由地址欄抽出場地名'};
+    }
+  }
+  return null;
+}
+
+/* ══════════════════════════════════════════════════════════
+   主解析
+   ══════════════════════════════════════════════════════════ */
+function parseCaption(raw){
+  const used=[];
+  const text = raw;
+  const T = norm(text);
+  const res = {
+    name:null, name_how:null,
+    address:null, postal:null, country:null, prefecture:null,
+    city:null, district:null, address_tail:null, lat:null, lng:null,
+    brand_from:null,
+    category:null, category_why:null,
+    dates:[], hours:null, phone:null, price:null,
+    tags:[], confidence:{}, overall:0, needs_review:true
+  };
+
+  /* ── 1. 電話 ───────────────────────────── */
+  // ⚠️ 一定要喺「時間」之前做，否則「10:00-23:00」會被誤認做電話
+  const mPhone = T.match(/(?:電話|TEL|Tel|tel|☎️?|📞)\s*[:：]?\s*(\d{2,4}-\d{2,4}-[\dXｘ×]{3,4})/)
+              || T.match(/(\d{2,4}-\d{2,4}-[\dXｘ×]{3,4})/)
+              || T.match(/(0\d{1,3}-\d{1,4}-\d{3,4})/);
+  if(mPhone){
+    res.phone = mPhone[1].trim();
+    const masked = /[Xｘ×]/.test(res.phone);
+    used.push({rule: masked?'PHONE_MASK':'PHONE', match:res.phone,
+      note: masked?'原文用 X 遮蔽，只有部分號碼':'電話號碼'});
+  }
+
+  /* ── 2. 地址 ───────────────────────────── */
+  let addrLine=null, addrHow=null;
+  const allDistrictWords = [...new Set(Object.values(DISTRICTS).flat())];
+
+  // 2a 明確標籤（支援 🔸📍 等 emoji prefix）
+  const mAddr = T.match(/(?:🔸|📍|▪️|🔹)?\s*(?:地址|住址|住所|Address|address)\s*[:：]?\s*(.+)/);
+  if(mAddr){
+    addrLine = mAddr[1].split('\n')[0].trim();
+    addrHow = '有明確「地址／住所」標籤';
+  }
+
+  // 2b 冇標籤：逐行偵測
+  if(!addrLine){
+    const lines = T.split('\n');
+    for(const rawLn of lines){
+      const ln = rawLn.trim();
+      if(!ln) continue;
+      // (1) 有郵便番号
+      if(/〒/.test(ln)){ addrLine=ln; addrHow='偵測到郵便番号 〒'; break; }
+      // (2) 都道府縣 + 市區町村
+      if(/(都|道|府|県|縣)[^\s]{1,6}(市|区|區)/.test(ln)){ addrLine=ln; addrHow='偵測到都道府縣＋市區格式'; break; }
+      // (3) 有 📍 等 marker（例如「📍地址：」「📍喺銅鑼灣利園」）
+      const noEmoji = ln.replace(/^[📍🔸🔹▪️🚇🕐💰☎️📞\s]+/,'').trim();
+      if(/^[📍🔸🔹▪️]/.test(ln) && noEmoji){
+        const mr = matchRegion(noEmoji, allDistrictWords);
+        addrLine = (mr && mr.index <= 2) ? mr.seg : noEmoji;
+        addrHow = '偵測到 📍 標記行';
+        break;
+      }
+      // (4) 純地區名行（例如「在 #銅鑼灣利園 就吃得到，」）→ 只抽地區附近嘅窗
+      if(ln.length<=40){
+        const mr = matchRegion(ln, allDistrictWords);
+        if(mr && !/[。！？!?]$/.test(ln)){
+          addrLine = mr.seg;
+          addrHow = `偵測到行內地區名「${mr.word}」`;
+          break;
+        }
+      }
+    }
+  }
+  if(addrLine){
+    used.push({rule:'ADDR_'+(addrHow.includes('標籤')?'LABEL':addrHow.includes('郵便')?'POSTAL':'DETECT'),
+      match:addrLine, note:addrHow});
+    // 郵便番号
+    const mPost = addrLine.match(/〒?\s*(\d{3}-\d{4})/);
+    if(mPost){ res.postal=mPost[1]; used.push({rule:'POSTAL_JP',match:'〒'+mPost[1],note:'日本郵便番号 → 可精準定位'}); }
+
+    // 縣 / 市 / 區（先做「福岡縣」級別嘅市）
+    for(const [pref, list] of Object.entries(DISTRICTS)){
+      if(pref==='福岡市') continue;
+      // 長字優先，避免「福岡市」食咗「福岡縣」
+      const sorted=[...list].sort((a,b)=>b.length-a.length);
+      for(const d of sorted){
+        if(addrLine.includes(d)){
+          if(pref==='福岡縣' && /(市|県|縣)$/.test(d)){ res.prefecture='福岡縣'; res.city=d; res.country='日本'; }
+          else if(pref==='其他日本'){
+            const PREF_MAP=[[/大阪/,'大阪府'],[/東京/,'東京都'],[/京都/,'京都府'],[/神戸|兵庫/,'兵庫縣'],
+                            [/名古屋|愛知/,'愛知縣'],[/札幌|北海道/,'北海道'],[/沖縄/,'沖縄縣'],[/福岡/,'福岡縣']];
+            res.prefecture = res.prefecture || (PREF_MAP.find(([re])=>re.test(addrLine))||[,'（日本）'])[1];
+            // 京都／神戸／名古屋／札幌 呢啲本身係「市」，其餘（難波／道頓堀…）係地區
+            if(/^(京都|神戸|名古屋|札幌|沖縄)$/.test(d)) res.city=res.city||d;
+            else res.district=res.district||d;
+            res.country='日本';
+          }
+          else if(pref==='香港'){ res.district=res.district||d; res.country='香港'; }
+          else if(pref==='韓國'){ res.district=res.district||d; res.country='韓國'; }
+          used.push({rule:'GEO_MATCH',match:d,note:`地址命中詞典：${pref}`});
+          break;
+        }
+      }
+      // ⚠️ 唔可以 break 外層，因為「大阪府大阪市中央区」要中多個層級
+    }
+    // 福岡市內嘅區 / 町名（第二輪，等市名先定咗）
+    for(const d of DISTRICTS['福岡市']){
+      if(addrLine.includes(d)){
+        if(/区$/.test(d)) res.city = (res.city && /市$/.test(res.city)) ? d : (res.city||d);
+        else res.district = res.district||d;
+        res.country = res.country||'日本';
+        res.prefecture = res.prefecture||'福岡縣';
+        used.push({rule:'GEO_FUKUOKA',match:d,note:'福岡市內地名'});
+        break;
+      }
+    }
+    // 地址尾巴
+    res.address_tail = tailAddress(addrLine);
+    if(res.address_tail) used.push({rule:'ADDR_TAIL',match:res.address_tail,note:'町名番地，可直接餵地圖 API'});
+
+    // 國家判定
+    if(res.postal && !res.country){ res.country='日本'; used.push({rule:'COUNTRY_JP',match:'郵便番号格式',note:'判定為日本'}); }
+    if(/香港/.test(addrLine)) res.country='香港';
+    if(/서울|부산|대구|인천|제주/.test(addrLine)) res.country='韓國';
+
+    // 清理 address 顯示用
+    let clean = addrLine
+      .replace(/〒?\s*\d{3}-\d{4}/,'')
+      .replace(/^[：:\s]+/,'')
+      .replace(/\s{2,}/g,' ')
+      .trim();
+    res.address = clean || addrLine;
+  }
+
+  /* ── 3. 店名 ───────────────────────────── */
+  let nameCand=null;
+  const NAME_BLACK = /彼岸花|蔓珠沙華|曼珠沙華|ヒガンバナ/;   // 主題詞，唔係店名
+  const valid = s => s && !isGenericName(s) && !NAME_BLACK.test(s) && s.length>=2;
+
+  // 3a 明確標籤（最高優先）
+  const mNm = T.match(/(?:店名|名稱|店家)\s*[:：]\s*([^\n]{2,30})/);
+  if(mNm && valid(mNm[1].trim())) nameCand={name:mNm[1].trim(), how:'明確「店名：」標籤'};
+
+  // 3b 〖#名字〗 標記（IG 最常見，好準）
+  if(!nameCand){
+    const mB = text.match(/〖\s*#?([^〗〖]{2,30})\s*〗/);
+    if(mB && valid(mB[1].replace(/^#/,'').trim()))
+      nameCand={name:mB[1].replace(/^#/,'').trim(), how:'〖〗 標記（IG 常見格式）'};
+  }
+
+  // 3c 由地址欄抽場地名（⚠️ 一定要排喺「引號」之前，因為引號內容多數係主題詞）
+  if(!nameCand && addrLine){
+    const v = venueFromAddress(addrLine);
+    if(v && valid(v.name)) nameCand={name:v.name, how:v.how};
+  }
+
+  // 3d 「」引號內容：只接受含設施／店舖特徵字嘅
+  if(!nameCand){
+    const mC = text.match(/[「『]([^」』]{2,30})[」』]/g) || [];
+    const cands = mC.map(s=>s.replace(/[「」『』]/g,'').trim()).filter(valid);
+    const strong = cands.filter(s=>FACILITY.some(f=>s.includes(f)) || NAME_HINT.some(h=>s.includes(h)));
+    if(strong.length) nameCand={name:strong[0], how:'「」引號內容（含店名／場地特徵字）'};
+  }
+
+  // 3e hashtag + 店名提示
+  if(!nameCand){
+    const hs=[...text.matchAll(/#([^\s#\[\]【】〖〗｜|，,。！!？?🍤☕]+)/g)].map(m=>m[1].trim());
+    const hsHit = hs.find(h=>valid(h) && NAME_HINT.some(k=>h.includes(k)) && h.length>=3);
+    if(hsHit) nameCand={name:hsHit, how:'hashtag 含店名特徵字'};
+  }
+
+  // 3f 最尾嘗試：正文第一行嘅書名號／括號內容（【】〖〗「」都可以）
+  if(!nameCand){
+    const first = text.split('\n')[0]||'';
+    const clean = s => s.replace(/[#＃〖〗【】「」『』]/g,'').replace(/^[！!開幕座落\s]+/,'').trim();
+    const mE = first.match(/【([^】]{2,40})】/) || first.match(/〖([^〗]{2,40})〗/) || first.match(/「([^」]{2,40})」/);
+    if(mE){
+      const c = clean(mE[1]);
+      if(valid(c)) nameCand={name:c, how:'開頭標題內容（第一行）'};
+    }
+  }
+
+  if(nameCand){ res.name=nameCand.name; res.name_how=nameCand.how;
+    used.push({rule:'NAME',match:res.name,note:nameCand.how}); }
+  else {
+    // 3g 最後防線：由地址抽出場地名（冇任何標題可用時）
+    if(addrLine){
+      const v = venueFromAddress(addrLine);
+      if(v && valid(v.name)){ res.name=v.name; res.name_how=v.how;
+        used.push({rule:'NAME_FROM_ADDR',match:res.name,note:v.how}); }
+    }
+    if(!res.name) res.name_how='抽唔到可靠名稱（可能係主題帖，唔係特定店舖）';
+  }
+
+  /* ── 4. 品牌來源 vs 實際位置 ─────────────── */
+  const nameHasFukuoka = /福岡|博多|天神|中洲|九州/.test(res.name||'');
+  if(nameHasFukuoka && res.country && res.country!=='日本'){
+    res.brand_from = '福岡';
+    used.push({rule:'ORIGIN_SPLIT',match:'店名含福岡字眼',
+      note:`實際位置＝${res.country}${res.district?' '+res.district:''}；品牌來源＝福岡。⚠️ 唔可以歸入福岡行程！`});
+  }
+  if(!res.brand_from && res.country==='日本'){
+    const originHit = (T.match(/從\s*#?(福岡|東京|大阪|京都|首爾|台灣|日本)\s*(漂洋過海|空運|直送|來)/)||[])[1];
+    if(originHit){ res.brand_from=originHit; used.push({rule:'ORIGIN_TEXT',match:originHit,note:'文中提到「從…來」'}); }
+  }
+
+  /* ── 5. 日期 ───────────────────────────── */
+  const dateLines = [];
+  const mD = T.match(/🔸?\s*日期\s*[:：]?\s*([\s\S]{0,220}?)(?=\n\s*🔸|\n\s*[^\s]*時間|$)/);
+  if(mD) dateLines.push(mD[1]);
+  else {
+    const lines=T.split('\n');
+    lines.forEach(ln=>{ if(/\d{1,2}\s*月\s*\d{1,2}\s*日/.test(ln)) dateLines.push(ln); });
+  }
+  const dateBlob = dateLines.join(' ');
+  const found=[];
+  // 範圍：9月24日至10月8日
+  const reRange=/(\d{1,2})\s*月\s*(\d{1,2})?\s*日?\s*至\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/g;
+  let mm;
+  while((mm=reRange.exec(dateBlob))){
+    found.push({from:`${+mm[1]}/${+mm[2]}`, to:`${+mm[3]}/${+mm[4]}`, raw:mm[0].trim(), type:'range'});
+  }
+  // 單日：10月4日 / 9月中 / 10月初
+  // ⚠️ 要喺日期範圍同「一般觀賞 9月中」呢類句子度抽，但唔可以撞「20年10月初」呢種
+  const reSingle=/(\d{1,2})\s*月\s*(?:(\d{1,2})\s*日|(上旬|中旬|下旬|初|中|底|末))/g;
+  while((mm=reSingle.exec(T))){
+    const dup = found.some(f=>f.raw.includes(mm[0]) || mm[0].includes(f.raw));
+    if(dup) continue;
+    // 排除「20年10月」→ 前面係「年」字
+    const before = T[mm.index-1];
+    if(before==='年') continue;
+    let label;
+    if(mm[2]) label=`${+mm[1]}/${+mm[2]}`;
+    else{
+      const map={'初':'上旬','上旬':'上旬','中':'中旬','中旬':'中旬','下旬':'下旬','底':'下旬','末':'下旬'};
+      label=`${+mm[1]}月${map[mm[3]]||mm[3]}`;
+    }
+    found.push({from:label, to:null, raw:mm[0].trim(), type:mm[2]?'day':'period'});
+  }
+  // 去重 + 排序（範圍優先，然後按月份）
+  const seen=new Set();
+  found.filter(f=>!seen.has(f.raw) && seen.add(f.raw))
+       .sort((a,b)=>{
+         if(a.type==='range' && b.type!=='range') return -1;
+         if(b.type==='range' && a.type!=='range') return 1;
+         return 0;
+       })
+       .forEach(f=>res.dates.push(f));
+  if(res.dates.length) used.push({rule:'DATE',match:res.dates.map(d=>d.raw).join(' / '),
+    note:`抽到 ${res.dates.length} 個日期`});
+
+  /* ── 6. 時間 ───────────────────────────── */
+  const convTime = s=>s.replace(/(上午|早上|凌晨)/g,'AM').replace(/(下午|晚上|夜晚|中午)/g,'PM')
+    .replace(/(\d{1,2})\s*時/g,'$1:00');
+  const mH = T.match(/(?:營業時間|開放時間|時間|営業時間|🕐|🕒)\s*[:：]?\s*([^\n]{0,80})/);
+  let hourRaw = mH ? mH[1] : null;
+  if(!hourRaw){
+    const mH2 = T.match(/(\d{1,2}\s*[:：]\s*\d{2}\s*至\s*\d{1,2}\s*[:：]\s*\d{2})/);
+    if(mH2) hourRaw = mH2[1];
+  }
+  if(hourRaw){
+    const conv = convTime;
+    let h = conv(hourRaw).replace(/[（(][^）)]*[）)]/g,'').trim();
+    if(/^\d{1,2}:\d{2}\s*至\s*\d{1,2}:\d{2}$/.test(h)) h=h.replace('至','-');
+    if(h.length>60) h=h.slice(0,60);
+    res.hours=h;
+    used.push({rule:'HOURS',match:h,note:'時間表達式正規化'});
+  }
+  // 「下午3時至晚上8時」冇標籤都要捉
+  if(!res.hours){
+    const mH3 = T.match(/(?:下午|晚上|上午|早上)[^\n]{0,4}?\d{1,2}\s*時\s*至\s*(?:下午|晚上|上午|早上)?[^\n]{0,4}?\d{1,2}\s*時/);
+    if(mH3){
+      res.hours = convTime(mH3[0]).trim();
+      used.push({rule:'HOURS_CN',match:res.hours,note:'中文時間（下午X時至晚上Y時）'});
+    }
+  }
+  // 清理：如果抽出嚟嘅字串夾雜活動名（例如「彼岸花祭2026」下午3時至晚上8時），淨係留時間
+  if(res.hours){
+    const mTimeOnly = res.hours.match(/(?:AM|PM)?\d{1,2}(?::\d{2})?\s*[-至]\s*(?:AM|PM)?\d{1,2}(?::\d{2})?/);
+    if(mTimeOnly && mTimeOnly[0] !== res.hours && res.hours.length > mTimeOnly[0].length + 8){
+      res.hours = mTimeOnly[0].replace(/至/,'-');
+      used.push({rule:'HOURS_TRIM',match:res.hours,note:'由活動名之中抽出純時間'});
+    }
+    res.hours = res.hours.replace(/^[^\dAMPM]+/,'').trim();
+  }
+
+  /* ── 7. 價錢 ───────────────────────────── */
+  const mP = T.match(/(?:人均|予算|預算|費用|價錢|💰)\s*[:：]?\s*([^\n]{0,30})/)
+          || T.match(/([¥₩$]\s?[\d,]{2,9}(?:\s*[～至~-]\s*[¥₩$]?\s?[\d,]{2,9})?)/)
+          || T.match(/(\d[\d,]*)\s*円/);
+  if(mP){ res.price = mP[1].trim().replace(/\s+/g,' '); used.push({rule:'PRICE',match:res.price,note:'價錢／預算'}); }
+
+  /* ── 8. 分類 ───────────────────────────── */
+  for(const r of CAT_RULES){
+    const hit = r.w.find(w=>T.toLowerCase().includes(w.toLowerCase()));
+    if(hit){ res.category={key:r.key, label:r.why, why:hit}; 
+      used.push({rule:'CATEGORY',match:hit,note:`命中「${hit}」→ ${r.key} / ${r.why}`}); break; }
+  }
+
+  /* ── 9. Tags ───────────────────────────── */
+  const tags=[...text.matchAll(/#([^\s#\[\]【】〖〗｜|，,。！!？?🍤☕]+)/g)]
+    .map(m=>m[1].trim()).filter(t=>t.length>=2 && t.length<=16);
+  res.tags=[...new Set(tags)].slice(0,12);
+  if(res.tags.length) used.push({rule:'HASHTAG',match:res.tags.join(' '),note:'抽到 hashtag 做標籤'});
+
+  /* ── 10. 信心分數 ──────────────────────── */
+  const C=res.confidence;
+  C.name     = res.name ? (res.name_how.includes('店名')?96:res.name_how.includes('〖〗')?92:res.name_how.includes('標題')?88:res.name_how.includes('引號')?86:res.name_how.includes('hashtag')?80:res.name_how.includes('地址')?82:70) : 0;
+  C.address  = res.address ? (res.postal?96:(res.address_tail?86:74)) : 0;
+  C.location = res.district||res.city ? (res.address?92:70) : 0;
+  C.category = res.category ? 78 : 0;
+  C.dates    = res.dates.length ? 88 : 0;
+  C.hours    = res.hours ? 72 : 0;
+  C.price    = res.price ? 84 : 0;
+  C.phone    = res.phone ? 90 : 0;
+  // 加權總分（重點：名 + 位置）
+  const w = [['name',0.32],['location',0.26],['address',0.16],['category',0.14],['dates',0.06],['hours',0.03],['price',0.03]];
+  res.overall = Math.round(w.reduce((s,[k,ww])=>s+(C[k]||0)*ww,0));
+  res.needs_review = res.overall<70 || !res.name || !(res.district||res.city);
+
+  res.rules = used;
+  return res;
+}
+
+/* ══════════════════════════════════════════════════════════
+   UI
+   ══════════════════════════════════════════════════════════ */
+function renderPresets(){
+  document.getElementById('presets').innerHTML = PRESETS.map((p,i)=>
+    `<button class="tb" onclick="loadPreset(${i})"><b>▸</b>${p.name}</button>`).join('');
+}
+function loadPreset(i){
+  document.getElementById('cap').value = PRESETS[i].text;
+  document.querySelectorAll('.tb').forEach(b=>b.classList.remove('on'));
+  document.querySelectorAll('.tb')[i].classList.add('on');
+  run();
+}
+function lit(obj){
+  return JSON.stringify(obj,null,2)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"([^"]+)":/g,'<span class="k">"$1"</span>:')
+    .replace(/: "([^"]*)"/g,': <span class="s">"$1"</span>')
+    .replace(/: (true|false|null)/g,': <span class="bool">$1</span>')
+    .replace(/: (-?\d+\.?\d*)/g,': <span class="num">$1</span>');
+}
+function cfClass(v){ return v>=85?'hi':v>=65?'md':v>0?'lo':'na'; }
+
+function field(icon,label,value,conf,sub){
+  const c = conf===undefined?null:conf;
+  const valHtml = value
+    ? `<div class="vl">${value}${sub?`<span class="sub">${sub}</span>`:''}</div>`
+    : `<div class="vl empty">未抽到</div>`;
+  return `<div class="field">
+    <div class="ic">${icon}</div>
+    <div class="mid"><div class="lb">${label}</div>${valHtml}</div>
+    <span class="cf ${c===null?'na':cfClass(c)}">${c===null?'—':c+'%'}</span>
+  </div>`;
+}
+
+function run(){
+  const raw = document.getElementById('cap').value;
+  const fieldsBox=document.getElementById('fields');
+  const rulesBox=document.getElementById('rules');
+  const outBox=document.getElementById('out');
+
+  if(!raw.trim()){
+    fieldsBox.innerHTML='<p style="color:var(--dim);font-size:12.5px">貼文字或者撳範例開始。</p>';
+    rulesBox.innerHTML='<p style="color:var(--dim);font-size:12.5px">—</p>';
+    outBox.innerHTML='<span class="nul">// 等輸入…</span>';
+    document.getElementById('overall').textContent='—';
+    document.getElementById('confBadge').textContent='confidence —';
+    document.getElementById('ruleCount').textContent='0 條';
+    const w0=document.getElementById('weights'); if(w0) w0.innerHTML='';
+    return;
+  }
+
+  const r = parseCaption(raw);
+  const C=r.confidence;
+
+  // 位置字串
+  const locParts=[];
+  if(r.country) locParts.push(r.country);
+  if(r.prefecture && r.prefecture!=='（日本）') locParts.push(r.prefecture);
+  if(r.city) locParts.push(r.city);
+  if(r.district) locParts.push(r.district);
+
+  const locSub = r.brand_from
+    ? `⚠️ 品牌來自「${r.brand_from}」，但實際位置係呢度 —— 唔好歸入 ${r.brand_from} 行程！`
+    : (r.address?('根據地址：'+r.address):null);
+
+  let html='';
+  html += field('🏷','名稱 / 店名', r.name, C.name, r.name_how);
+  html += field('📍','實際位置', locParts.length?locParts.join(' › '):null, C.location, locSub);
+  html += field('🏠','地址', r.address, C.address,
+          [r.postal?('〒'+r.postal):null, r.address_tail?('番地：'+r.address_tail):null].filter(Boolean).join(' · ')||null);
+  html += field('🗂','分類', r.category?`${r.category.key} · ${r.category.label}`:null, C.category,
+          r.category?`命中關鍵字「${r.category.why}」`:null);
+  html += field('📅','日期',
+          r.dates.length?r.dates.map(d=>d.type==='range'?`${d.from} – ${d.to}`:d.from).join('　|　'):null,
+          C.dates, r.dates.length?r.dates.map(d=>d.raw).join(' · '):null);
+  html += field('🕐','時間', r.hours, C.hours);
+  html += field('💰','價錢 / 預算', r.price, C.price);
+  html += field('☎️','電話', r.phone, C.phone);
+
+  if(r.tags.length){
+    html += `<div class="field">
+      <div class="ic">#️⃣</div>
+      <div class="mid"><div class="lb">標籤 · ${r.tags.length}</div>
+      <div class="tags">${r.tags.map(t=>`<span class="tg">#${t}</span>`).join('')}</div></div>
+      <span class="cf na">—</span></div>`;
+  }
+  fieldsBox.innerHTML=html;
+
+  // 規則
+  rulesBox.innerHTML = r.rules.length
+    ? r.rules.map(u=>`<div class="rule"><span class="rk">${u.rule}</span>
+        <div class="rt">${u.note}<br><b>${u.match}</b></div></div>`).join('')
+    : '<p style="color:var(--dim);font-size:12.5px">冇命中任何規則。</p>';
+  document.getElementById('ruleCount').textContent = r.rules.length+' 條';
+
+  // 輸出
+  const item={
+    source:'caption',
+    name:r.name, name_method:r.name_how,
+    country:r.country, prefecture:r.prefecture, city:r.city, district:r.district,
+    address:r.address, postal_code:r.postal, address_tail:r.address_tail,
+    brand_from:r.brand_from,
+    lat:r.lat, lng:r.lng,
+    category:r.category?r.category.key:null,
+    category_label:r.category?r.category.label:null,
+    dates:r.dates, hours:r.hours, phone:r.phone, price:r.price,
+    tags:r.tags,
+    confidence:r.overall,
+    field_confidence:r.confidence,
+    needs_review:r.needs_review,
+    parsed_at:new Date().toISOString().slice(0,19)
+  };
+  outBox.innerHTML=lit(item);
+
+  const b=document.getElementById('overall');
+  b.textContent = `信心 ${r.overall}%`;
+  b.style.color = r.overall>=85?'var(--ok)':r.overall>=65?'var(--warn)':'var(--bad)';
+  document.getElementById('confBadge').textContent=`confidence ${r.overall}%`;
+
+  // 信心拆解：每個欄位嘅得分 × 權重
+  const WEIGHTS=[
+    ['name','名稱',0.32],['location','位置',0.26],['address','地址',0.16],
+    ['category','分類',0.14],['dates','日期',0.06],['hours','時間',0.03],['price','價錢',0.03],
+  ];
+  const wbox=document.getElementById('weights');
+  const rows = WEIGHTS.map(([k,label,w])=>{
+    const v = C[k]||0;
+    const contrib = v*w;
+    return `<div class="wrow${v===0?' zero':''}">
+      <span class="wn">${label} <span style="opacity:.6">${w}</span></span>
+      <span class="wt"><i style="width:${v}%"></i></span>
+      <span class="wv">${v?`${v}×${w}=${contrib.toFixed(1)}`:'0'}</span>
+    </div>`;
+  }).join('');
+  const total = WEIGHTS.reduce((s,[k,,w])=>s+(C[k]||0)*w,0);
+  wbox.innerHTML = rows + `<div class="wsum">
+      <span style="color:var(--dim)">加權總分</span>
+      <b style="color:${r.overall>=85?'var(--ok)':r.overall>=65?'var(--warn)':'var(--bad)'}">${total.toFixed(1)} → ${r.overall}%</b>
+    </div>
+    <div style="font-size:11px;color:var(--dim);margin-top:9px;line-height:1.7">
+      ${r.needs_review
+        ? '⚠️ 低過 70% 或缺少名稱／位置 → <b style="color:var(--warn)">標記 needs_review，App 會彈出手動補充</b>'
+        : '✓ 夠高 → 自動歸類入 group，用戶唔使理'}
+    </div>`;
+}
+
+renderPresets();
+loadPreset(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+# ⚠️ Fly.io 部署設定（免費層：3 部細 VM）
+#
+#   用法：
+#     1. 改 `app` 做你嘅名（全球唯一）
+#     2. fly launch --no-deploy
+#     3. fly volume create wander_data --size 1
+#     4. fly secrets set WANDER_SIGNUP_MODE=invite WANDER_ADMIN_EMAILS=你@gmail.com
+#     5. fly deploy
+
+app = "wander-CHANGE-ME"
+primary_region = "hkg"          # ⚠️ 香港最近
+
+[build]
+
+[env]
+  WANDER_PORT = "8787"
+  WANDER_DB = "/data/wander.db"
+
+# ⚠️⚠️ 資料庫一定要掛 volume ——
+#    唔掛嘅話每次 deploy 都會**清空所有用戶資料**。
+[[mounts]]
+  source = "wander_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  # ⚠️ 免費層：唔用就停（但你一撳就即刻起返，~1 秒）
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
