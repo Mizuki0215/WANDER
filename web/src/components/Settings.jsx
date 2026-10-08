@@ -171,6 +171,35 @@ export default function Settings({ user, theme, setTheme, onLogout, onUserUpdate
       </div>
 
       {/* ══════════════════════════════════════════════
+          ⚠️⚠️ 開發版後台入口 —— 放喺**最出面**，唔收埋
+          ══════════════════════════════════════════════
+          ⚠️ 用戶報：「入到 Dashboard 未？nooo」
+
+          ⚠️ 原因有兩個：
+            ① `adminMe()` 只喺 mount 嗰陣叫 → 登入之後唔會再叫
+               （已修：抽做 `checkAdmin()`，登入後都叫）
+            ② 入口**收埋喺「更多設定」入面** → 好易搵唔到
+
+          ✅ 而家 admin 一入設定就見到（唔使撳「更多設定」）。 */}
+      {isAdmin && (
+        <button className="card tap" onClick={onOpenAdmin} style={{
+          display: 'flex', alignItems: 'center', gap: 11, width: '100%',
+          marginTop: 14, textAlign: 'left', cursor: 'pointer',
+          borderColor: 'var(--neon)', borderWidth: 2,
+          background: 'color-mix(in srgb, var(--neon) 12%, transparent)',
+        }}>
+          <span style={{ fontSize: 22 }}>🛠</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 900, fontSize: 14 }}>開發版後台</div>
+            <div className="sub" style={{ fontSize: 10.5, marginTop: 2 }}>
+              幾多數據 · 邊個用戶用緊 · 功能使用
+            </div>
+          </div>
+          <span className="sub" style={{ fontSize: 16 }}>›</span>
+        </button>
+      )}
+
+      {/* ══════════════════════════════════════════════
           第二層：其他嘢收埋（唔好再平鋪！）
           ══════════════════════════════════════════════ */}
       <button className="btn wide ghost" style={{ marginTop: 18 }}

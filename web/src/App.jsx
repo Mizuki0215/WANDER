@@ -213,6 +213,31 @@ export default function App() {
     return () => window.removeEventListener('wander:logout', onLogout)
   }, [])
 
+  /**
+   * ⚠️⚠️ 查我係唔係 admin（決定要唔要顯示後台入口）。
+   *
+   *   ⚠️⚠️ 用戶報：「入到 Dashboard 未？nooo」
+   *
+   *   ⚠️ 根因：呢個檢查原本**只喺 mount 嗰陣叫一次**，而且
+   *      `if (!auth.token) return` ——
+   *      即係「**登入**入去」嘅用戶**永遠** `isAdmin = false`！
+   *      （只有「一開 app 已經有 token」嘅舊 session 先叫得到。）
+   *
+   *   ✅ 修法：抽做 `checkAdmin()`，喺**登入之後**都叫。
+   *      ⚠️ 亦都加入 `refreshMe()`，咁改權限之後 refresh 就生效。
+   */
+  const checkAdmin = useCallback(async () => {
+    // ⚠️ 冇 token 就唔好問（會 401）
+    if (!auth.token) { setIsAdmin(false); return }
+    try {
+      const x = await api.adminMe()
+      setIsAdmin(!!x?.admin)
+    } catch {
+      // ⚠️ 403 = 唔係 admin（正常）；其他錯都當唔係
+      setIsAdmin(false)
+    }
+  }, [])
+
   // 啟動
   useEffect(() => {
     if (bootRef.current) return
@@ -223,13 +248,12 @@ export default function App() {
         const r = await api.me()
         setUser(r.user); setTrips(r.trips)
         if (r.user.theme) setTheme(r.user.theme)
-        // ⚠️ 開發版後台：問下我係唔係 admin（決定要唔要顯示入口）
-        api.adminMe().then(x => setIsAdmin(!!x.admin)).catch(() => {})
+        checkAdmin()
         // ⚠️ 記一個事件（後台數據來源）。失敗唔緊要。
         api.track('login')
       } catch { auth.clear() } finally { setBooting(false) }
     })()
-  }, [setTheme])
+  }, [setTheme])   // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * ⚠️⚠️ 重新攞自己嘅 user（`/api/me`）。
@@ -245,8 +269,10 @@ export default function App() {
       const r = await api.me()
       if (r?.user) setUser(r.user)
       if (r?.trips) setTrips(r.trips)
+      // ⚠️ 順便重新檢查 admin（改咗 WANDER_ADMIN_EMAILS 之後 refresh 就生效）
+      checkAdmin()
     } catch {}
-  }, [])
+  }, [checkAdmin])
 
   const refreshTrips = useCallback(async () => {
     const r = await api.me()
@@ -427,7 +453,15 @@ export default function App() {
     return (
       <div className="app"><Stars />
         <PwaBar />
-        <Login onLogin={async (u) => { setUser(u); if (u.theme) setTheme(u.theme); await refreshTrips() }} />
+        <Login onLogin={async (u) => {
+          setUser(u)
+          if (u.theme) setTheme(u.theme)
+          // ⚠️⚠️ 一定要喺**登入之後**檢查 admin ——
+          //    原本呢個檢查只喺 mount 嗰陣做，而且未登入就 return，
+          //    所以「登入入去」嘅用戶永遠見唔到後台入口。
+          checkAdmin()
+          await refreshTrips()
+        }} />
         <Toast />
       </div>
     )

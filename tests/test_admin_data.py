@@ -262,3 +262,113 @@ class TestAdminAccess:
         assert "WANDER_ADMIN_EMAILS" in blk, "冇讀 env"
         # ⚠️ 唔可以有 hardcode 嘅 email
         assert "@gmail.com" not in blk, "hardcode 咗 email"
+
+
+class TestAdminAccessBug:
+    """
+    🚨🚨 用戶報：「入到 Dashboard 未？nooo」
+
+    ⚠️ 實測捉到**兩個**原因：
+
+       ① ⚠️⚠️ `adminMe()` **只喺 mount 嗰陣叫一次**，而且
+          `if (!auth.token) return` ——
+          即係「**登入**入去」嘅用戶**永遠** `isAdmin = false`！
+          （只有「一開 app 已經有 token」嘅舊 session 先叫得到。）
+
+       ② 入口**收埋喺「更多設定」**入面 → 好易搵唔到。
+
+    ⚠️ 呢個係經典 bug：一次性檢查 + 條件 return =
+       後登入嘅用戶永遠攞唔到嗰個狀態。
+    """
+
+    @pytest.fixture(scope="class")
+    def app(self):
+        return (WEB / "App.jsx").read_text(encoding="utf-8")
+
+    def test_check_admin_extracted(self, app):
+        """⚠️ 要抽做一個 function 先可以喺登入之後再叫。"""
+        assert "const checkAdmin = useCallback(" in app, "冇抽 checkAdmin"
+
+    def test_check_admin_defined_before_use(self, app):
+        """
+        ⚠️ `useCallback` 用 `const` —— 用之前一定要定義
+           （唔係會 ReferenceError / TDZ）。
+        """
+        i_def = app.index("const checkAdmin = useCallback(")
+        i_use = app.index("        checkAdmin()")
+        assert i_def < i_use, "checkAdmin 定義喺使用之後"
+
+    def test_called_after_login(self, app):
+        """
+        ⚠️⚠️ 核心修法 —— **登入之後**一定要檢查 admin。
+           原本只喺 mount 做 → 登入嘅用戶永遠見唔到後台。
+        """
+        i = app.index("<Login onLogin=")
+        blk = app[i:i + 600]
+        assert "checkAdmin()" in blk, "登入之後冇 checkAdmin（呢個就係 bug）"
+
+    def test_called_in_refresh_me(self, app):
+        """⚠️ refresh 都要重check（改咗 admin 名單之後 refresh 就生效）。"""
+        i = app.index("const refreshMe = useCallback(")
+        blk = app[i:i + 700]
+        assert "checkAdmin()" in blk, "refreshMe 冇 checkAdmin"
+
+    def test_sets_false_when_no_token(self, app):
+        """⚠️ 冇 token 要設 false（唔好留住上一個用戶嘅 admin 狀態）。"""
+        i = app.index("const checkAdmin = useCallback(")
+        blk = app[i:i + 600]
+        assert "setIsAdmin(false)" in blk, "冇 token 嗰陣冇清 admin"
+
+    def test_handles_403_gracefully(self, app):
+        """⚠️ 403（唔係 admin）係正常，唔應該拋錯。"""
+        i = app.index("const checkAdmin = useCallback(")
+        blk = app[i:i + 600]
+        assert "catch" in blk, "冇 catch（403 會拋）"
+
+
+class TestAdminEntryVisibility:
+    """⚠️ 入口要**一眼睇到**（唔好收埋喺「更多設定」）。"""
+
+    @pytest.fixture(scope="class")
+    def settings(self):
+        return (WEB / "components" / "Settings.jsx").read_text(encoding="utf-8")
+
+    def test_entry_outside_more_toggle(self, settings):
+        """
+        ⚠️⚠️ 入口一定要喺 `{more && (` **之前** ——
+           唔係嘅話要撳「更多設定」先見到（用戶搵唔到）。
+        """
+        # ⚠️ 搵 JSX 文字（唔係註解）
+        i_entry = settings.index(">開發版後台<")
+        i_more = settings.index("{more && (")
+        assert i_entry < i_more, "入口收埋喺「更多設定」入面"
+
+    def test_entry_only_for_admin(self, settings):
+        """⚠️ 只有 admin 見到（唔可以泄漏畀普通用戶）。"""
+        # ⚠️⚠️ 要搵 **JSX 入面嘅文字**（`>開發版後台<`），
+        #    唔可以淨係搵 `開發版後台` —— 我嘅**註解**都有呢個字，
+        #    會 match 到註解（`index()` 回第一個）。
+        i_entry = settings.index(">開發版後台<")
+        i_gate = settings.rindex("{isAdmin && (", 0, i_entry)
+        assert i_gate > 0, "入口唔喺 isAdmin gate 入面"
+        # ⚠️ gate 同入口之間唔可以有 `)}` 閂咗個 gate
+        between = settings[i_gate:i_entry]
+        assert ")}" not in between, "入口唔喺 isAdmin gate 入面"
+
+    def test_entry_calls_onopenadmin(self, settings):
+        # ⚠️ `onClick={onOpenAdmin}` 喺文字**之前**（同一個 button）——
+        #    所以要向前搵，唔係向後。
+        i = settings.index(">開發版後台<")
+        blk = settings[max(0, i - 500):i + 200]
+        assert "onOpenAdmin" in blk, "入口冇 call onOpenAdmin"
+
+    def test_renders_differently_for_admin(self):
+        """
+        ⚠️⚠️ **實測**：`isAdmin=true` 同 `false` 一定要 render 唔同嘢。
+           （原本兩個都係 10302 bytes —— 即係個掣根本冇 render。）
+        """
+        import subprocess
+        r = subprocess.run(
+            ["node", str(ROOT / "tests" / "web" / "admin_entry.test.mjs")],
+            capture_output=True, text=True, cwd=str(ROOT), timeout=120)
+        assert r.returncode == 0, f"admin 入口 render 測試失敗:\n{r.stdout[-600:]}"
