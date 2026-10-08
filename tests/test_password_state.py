@@ -256,3 +256,166 @@ class TestTimezoneApi:
     def test_frontend_api_method(self):
         s = code(WEB / "lib" / "api.js")
         assert "tz:" in s, "冇 api.tz"
+
+
+# ══════════════════════════════════════════════════════════════
+# ⑦ 拖放 + 城市分組（用戶要求）
+# ══════════════════════════════════════════════════════════════
+
+class TestDragToTimeslot:
+    """
+    ⚠️ 用戶要求：
+       「排行程嗰陣時候呢，我覺得係可以手動拖上去囉，
+        除咗有個 button 你撳入去之後可以話你放上去之外，
+        你仲可以用你隻手咁樣拖上去囉？」
+
+    ⚠️ 兩種操作要**同時**有：
+       · 撳 → 開彈層揀時長（手機單手用）
+       · 拖 → 直接放上時段格
+    """
+
+    @pytest.fixture(scope="class")
+    def dg(self):
+        return code(WEB / "components" / "DayGrid.jsx")
+
+    def test_uses_pointer_events(self, dg):
+        """
+        ⚠️⚠️ 一定要用 **Pointer Events** ——
+           HTML5 drag-and-drop（`draggable` + `dragstart`）
+           **手機完全唔 work**。
+        """
+        assert "onPointerDown" in dg, "冇 onPointerDown"
+        assert "pointermove" in dg, "冇 pointermove"
+        assert "pointerup" in dg, "冇 pointerup"
+
+    def test_no_html5_dnd(self, dg):
+        """⚠️ 唔可以用 HTML5 DnD（手機唔支援）。"""
+        assert "onDragStart" not in dg, "用咗 HTML5 DnD（手機唔 work）"
+        assert "draggable=" not in dg, "用咗 draggable（手機唔 work）"
+
+    def test_touch_action_none(self, dg):
+        """
+        ⚠️⚠️ 拖嘅元素一定要 `touch-action: none` ——
+           唔係嘅話手機當佢係**捲動**，pointermove 唔會觸發。
+        """
+        # ⚠️ 唔好用字數窗口 —— 我嘅解釋註解好長，會推走目標（中過）。
+        #    改用**區塊邊界**：托盤項 render 由 `shownPool.map` 開始。
+        i = dg.index("shownPool.map(it =>")
+        j = dg.index("</div>", dg.index("touchAction") if "touchAction" in dg[i:] else i)
+        blk = dg[i:i + 2500]
+        assert "touchAction: 'none'" in blk, "冇 touch-action: none（手機拖唔到）"
+
+    def test_no_pointer_capture(self, dg):
+        """
+        ⚠️ 唔可以用 `setPointerCapture` ——
+           一格住 pointer，`pointermove` 就唔會喺格上面觸發，
+           判斷唔到拖到邊一行。
+        """
+        assert "setPointerCapture" not in dg, "用咗 setPointerCapture（判斷唔到位）"
+
+    def test_tap_opens_picker(self, dg):
+        """⚠️ 撳一下要開彈層（唔可以淨係靠拖）。"""
+        assert "setShowPicker" in dg, "冇 PickerSheet"
+        i = dg.index("shownPool.map(it =>")
+        blk = dg[i:i + 2500]
+        assert "setShowPicker" in blk, "撳一下冇彈層"
+
+    def test_drag_does_not_open_picker(self, dg):
+        """
+        ⚠️⚠️ 實測捉到嘅 bug：
+           手機拖完（pointerdown→move→up）瀏覽器**照樣**發 `click`
+           → 彈層會彈出嚟（用戶唔想要）。
+           ✅ 用 `trayMoved` flag 吞咗個 click。
+        """
+        assert "trayMoved" in dg, "冇 trayMoved flag"
+        i = dg.index("if (trayMoved.current)")
+        assert "return" in dg[i:i + 80], "冇吞咗個 click"
+
+    def test_drag_places_at_dropped_time(self, dg):
+        """⚠️ 放手嗰陣要**用拖到嗰個時間**（唔係默認時間）。"""
+        i = dg.index("const trayUp")
+        blk = dg[i:i + 800]
+        assert "place(d.item, d.minutes" in blk, "放手冇用拖到嘅時間"
+
+    def test_no_place_if_not_dropped_in_grid(self, dg):
+        """
+        ⚠️ 冇拖入格就唔應該放（唔可以當「撳一下」就亂放）。
+        """
+        i = dg.index("const trayUp")
+        blk = dg[i:i + 800]
+        assert "d.minutes == null" in blk, "冇檢查有冇拖入格"
+
+
+class TestTrayCityGrouping:
+    """
+    ⚠️ 用戶要求：
+       「例如就係我哋知道嗰一日帶佢去邊度，例如係去福岡嘅咁，
+        可唔可以就係你 show 出嚟嘅時候，先優先喺下面未排入嘅
+        行程係可以整理咗 —— 例如 show 嘅係多嘅地址呢？
+        或者未入嘅行程可以 show 埋係邊一個城市嘅，
+        例如係香港嘅、福岡嘅、東京嘅。」
+    """
+
+    @pytest.fixture(scope="class")
+    def dg(self):
+        return code(WEB / "components" / "DayGrid.jsx")
+
+    def test_shows_city_per_item(self, dg):
+        """⚠️ ① 每項要顯示**佢喺邊個城市**。"""
+        assert "cityOf" in dg, "冇 cityOf"
+        i = dg.index("cityOf(it)") if "cityOf(it)" in dg else -1
+        assert i > 0, "冇用 cityOf"
+
+    def test_city_of_falls_back(self, dg):
+        """⚠️ 城市可以由 `city` / `district` / `location_path[0]` 攞。"""
+        i = dg.index("function cityOf")
+        blk = dg[i:i + 300]
+        assert "it.city" in blk, "冇用 it.city"
+        assert "it.district" in blk, "冇用 it.district"
+        assert "location_path" in blk, "冇用 location_path"
+
+    def test_groups_by_city(self, dg):
+        """⚠️ ② 要**按城市分組**。"""
+        assert "const groups" in dg, "冇 groups"
+        assert "new Map()" in dg[dg.index("const groups"):dg.index("const groups") + 900]
+
+    def test_today_city_first(self, dg):
+        """
+        ⚠️⚠️ 核心：**今日嘅城市排最前** ——
+           用戶排 Day 3（福岡）嗰陣，最想見到福岡嘅景點。
+        """
+        assert "isToday" in dg, "冇 isToday"
+        i = dg.index("arr.sort")
+        blk = dg[i:i + 400]
+        assert "a.isToday !== b.isToday" in blk, "冇按「今日」排序"
+        assert "a.isToday ? -1 : 1" in blk, "排序方向錯"
+
+    def test_today_city_marked(self, dg):
+        """⚠️ 今日嘅城市要有視覺標記（📍）。"""
+        assert "📍" in dg, "冇 📍 標記"
+        assert "var(--neon)" in dg, "冇用 accent 色"
+
+    def test_uncategorised_last(self, dg):
+        """⚠️ 「未分類」擺最後（唔係擺最前阻住）。"""
+        i = dg.index("arr.sort")
+        blk = dg[i:i + 500]
+        assert "未分類" in blk, "冇將「未分類」排最後"
+
+    def test_filter_chips(self, dg):
+        """⚠️ 要有城市篩選 chip。"""
+        assert "cityFilter" in dg, "冇 cityFilter"
+        assert "setCityFilter" in dg, "冇 setCityFilter"
+
+    def test_filter_limits_shown(self, dg):
+        """⚠️ 篩選要真係限制顯示嘅項。"""
+        i = dg.index("const shownPool")
+        blk = dg[i:i + 300]
+        assert "filter(" in blk, "shownPool 冇 filter"
+
+    def test_shows_address(self, dg):
+        """⚠️ 用戶問「可以 show 嘅係多嘅地址呢？」→ 有地址就顯示。"""
+        assert "it.address" in dg, "冇顯示地址"
+
+    def test_uses_build_day_cities(self, dg):
+        """⚠️ 要由旅程嘅城市清單計「今日係邊個城市」。"""
+        assert "buildDayCities" in dg, "冇用 buildDayCities"

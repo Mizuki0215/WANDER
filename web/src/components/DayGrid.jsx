@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { api, iconFor, confClass } from '../lib/api'
 import { toast, Empty } from '../lib/ui'
 import { toMinutes, fromMinutes, durationText } from '../lib/dates'
+import { buildDayCities } from '../lib/stops'
 
 /**
  * 時段格日曆（Day Grid）
@@ -57,6 +58,8 @@ export default function DayGrid({ trip, items, stops = [], day, onRefresh, onEdi
    *    （原本「逐日編排」就係因為咁而死）。
    */
   const [tray, setTray] = useState(null)               // {item, minutes|null}
+  // ⚠️ 拖完之後 `click` 都會觸發 → 會彈出 picker（用戶唔想要）
+  const trayMoved = useRef(false)
   const trayRef = useRef(null)
   const gridRef = useRef(null)
   const dragRef = useRef(null)
@@ -64,7 +67,70 @@ export default function DayGrid({ trip, items, stops = [], day, onRefresh, onEdi
   const dayItems = useMemo(
     () => items.filter(i => Number(i.day_index) === Number(day)),
     [items, day])
+  // ⚠️⚠️ 用戶要求：
+  //   「例如就係我哋知道嗰一日帶佢去邊度，例如係去福岡嘅咁，
+  //    可唔可以就係你 show 出嚟嘅時候，先優先喺下面未排入嘅
+  //    行程係可以整理咗 —— 例如 show 嘅係多嘅地址呢？
+  //    或者未入嘅行程可以 show 埋係邊一個城市嘅，
+  //    例如係香港嘅、福岡嘅、東京嘅。」
+  //
+  //   → 兩件事：
+  //     ① 每項顯示**佢喺邊個城市**
+  //     ② 按城市**分組 + 篩選**，而且**優先顯示今日嘅城市**
   const pool = useMemo(() => items.filter(i => i.day_index == null), [items])
+
+  /**
+   * ⚠️ 今日係邊個城市（由旅程嘅城市清單計）。
+   *   例：Day 3 → 福岡；Day 6 → 首爾。
+   */
+  const todayCities = useMemo(() => {
+    const total = (trip?.days) || (stops || []).reduce((n, s) => n + (Number(s.days) || 0), 0) || 1
+    const m = new Map(buildDayCities(stops, total).map(d => [d.day, d]))
+    const info = m.get(Number(day))
+    return new Set((info?.cities || []).filter(Boolean).map(c => c.trim().toLowerCase()))
+  }, [stops, trip, day])
+
+  /** ⚠️ 每項嘅城市（`city` → `district` → `location_path[0]` → 未分類）。 */
+  function cityOf(it) {
+    return (it.city || it.district || (it.location_path || [])[0] || '').trim()
+  }
+
+  /**
+   * ⚠️ 按城市分組。
+   *   ⚠️ 排序：**今日嘅城市擺最前**（用戶多數喺嗰度排嘢），
+   *      然後其他人數多嘅城市，最後「未分類」。
+   */
+  const groups = useMemo(() => {
+    const m = new Map()
+    for (const it of pool) {
+      const c = cityOf(it) || '（未分類）'
+      if (!m.has(c)) m.set(c, [])
+      m.get(c).push(it)
+    }
+    const arr = [...m.entries()].map(([city, list]) => {
+      const isToday = todayCities.has(city.toLowerCase())
+      return { city, list, isToday, n: list.length }
+    })
+    arr.sort((a, b) => {
+      // ① 今日嘅城市最前
+      if (a.isToday !== b.isToday) return a.isToday ? -1 : 1
+      // ② 「未分類」擺最後
+      const au = a.city === '（未分類）', bu = b.city === '（未分類）'
+      if (au !== bu) return au ? 1 : -1
+      // ③ 多嘢嘅城市前啲
+      return b.n - a.n || a.city.localeCompare(b.city)
+    })
+    return arr
+  }, [pool, todayCities])
+
+  // ⚠️ 城市篩選（空 = 全部）
+  const [cityFilter, setCityFilter] = useState('')
+
+  /** ⚠️ 篩選後要顯示嘅項。 */
+  const shownPool = useMemo(() => {
+    if (!cityFilter) return pool
+    return pool.filter(it => (cityOf(it) || '（未分類）') === cityFilter)
+  }, [pool, cityFilter])
 
   /** 將 items 砌成有 start/duration 嘅 block（冇 start_time 就自動接落去）。 */
   const blocks = useMemo(() => {
@@ -200,6 +266,8 @@ export default function DayGrid({ trip, items, stops = [], day, onRefresh, onEdi
     }
     const y = e.clientY - r.top + gridRef.current.scrollTop
     const m = minutesOfY(y)
+    // ⚠️ 一入到格就標記「郁過」—— 之後嘅 click 要吞咗佢
+    if (d.minutes == null) trayMoved.current = true
     if (m !== d.minutes) {
       trayRef.current = { ...d, minutes: m }
       setTray({ ...trayRef.current })
@@ -217,10 +285,14 @@ export default function DayGrid({ trip, items, stops = [], day, onRefresh, onEdi
     // ⚠️ 冇拖入格 → 唔做嘢（唔好當「撳一下」就亂放）
     if (d.minutes == null) return
     place(d.item, d.minutes, 60)
+    // ⚠️ 標記：呢次係拖（唔係撳）→ 之後嘅 click 要吞咗
+    trayMoved.current = true
   }, [trayMove])   // eslint-disable-line react-hooks/exhaustive-deps
 
   function startTrayDrag(e, it) {
     e.preventDefault()
+    // ⚠️ 每次落手都重設 —— 上一次嘅 drag 唔應該影響今次嘅 tap
+    trayMoved.current = false
     trayRef.current = { item: it, minutes: null }
     setTray({ ...trayRef.current })
     window.addEventListener('pointermove', trayMove)
@@ -447,9 +519,38 @@ export default function DayGrid({ trip, items, stops = [], day, onRefresh, onEdi
             </span>
           )}
         </div>
+
+        {/* ⚠️⚠️ 城市篩選（用戶要求：未入嘅行程 show 埋係邊個城市）
+               ⚠️ 今日嘅城市排最前，而且有 label 標明。 */}
+        {groups.length > 1 && (
+          <div className="chips" style={{ marginBottom: 9 }}>
+            <button className={`chip ${!cityFilter ? 'on' : ''}`}
+              style={{ fontSize: 10.5 }} onClick={() => setCityFilter('')}>
+              全部 {pool.length}
+            </button>
+            {groups.map(g => (
+              <button key={g.city}
+                className={`chip ${cityFilter === g.city ? 'on' : ''}`}
+                style={{
+                  fontSize: 10.5,
+                  // ⚠️ 今日嘅城市用 accent 色（一眼睇到今日去邊）
+                  borderColor: g.isToday ? 'var(--neon)' : undefined,
+                  color: g.isToday ? 'var(--neon)' : undefined,
+                }}
+                onClick={() => setCityFilter(cityFilter === g.city ? '' : g.city)}>
+                {g.isToday && '📍 '}{g.city} {g.n}
+              </button>
+            ))}
+          </div>
+        )}
+
         {pool.length === 0 ? (
           <div className="sub" style={{ fontSize: 11.5, padding: '6px 0' }}>
             {dayItems.length > 0 ? '全部景點都已經排好 ✓' : '冇景點可以排'}
+          </div>
+        ) : shownPool.length === 0 ? (
+          <div className="sub" style={{ fontSize: 11.5, padding: '6px 0' }}>
+            呢個城市冇未排嘅景點
           </div>
         ) : (
           <div style={{
@@ -457,13 +558,22 @@ export default function DayGrid({ trip, items, stops = [], day, onRefresh, onEdi
             gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
             gap: 8,
           }}>
-            {pool.map(it => {
+            {shownPool.map(it => {
               const dragging = tray?.item?.id === it.id
+              const c = cityOf(it)
+              const isToday = c && todayCities.has(c.toLowerCase())
               return (
                 <div key={it.id}
                   className="stop"
                   onPointerDown={e => startTrayDrag(e, it)}
-                  onClick={() => setShowPicker({ minutes: null, item: it })}
+                  onClick={() => {
+                    // ⚠️⚠️ 用戶報：拖完之後**彈層都會彈出嚟**。
+                    //    原因：手機 drag 完（pointerdown→move→up）
+                    //    瀏覽器**照樣**發一個 `click`。
+                    //    → 用 `trayMoved` 判斷，拖過就吞咗個 click。
+                    if (trayMoved.current) { trayMoved.current = false; return }
+                    setShowPicker({ minutes: null, item: it })
+                  }}
                   style={{
                     cursor: 'grab',
                     touchAction: 'none',      // ⚠️ 唔係嘅話手機當佢係捲動
@@ -476,8 +586,19 @@ export default function DayGrid({ trip, items, stops = [], day, onRefresh, onEdi
                   <div className="d">
                     <h4 style={{ fontSize: 12.5 }}>{it.name || '（未有名稱）'}</h4>
                     <p style={{ fontSize: 10 }}>
-                      {(it.district || it.city || '未分類')}
+                      {/* ⚠️ 用戶要求：show 埋係邊個城市（香港／福岡／東京） */}
+                      {isToday && <span style={{ color: 'var(--neon)' }}>📍 </span>}
+                      {c || '未分類'}
+                      {it.district && it.district !== c ? ` · ${it.district}` : ''}
                     </p>
+                    {/* ⚠️ 用戶問「可以 show 嘅係多嘅地址呢？」→
+                        有完整地址就顯示（截短）。 */}
+                    {it.address && (
+                      <p className="sub" style={{
+                        fontSize: 9, marginTop: 1,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>{it.address}</p>
+                    )}
                   </div>
                 </div>
               )
