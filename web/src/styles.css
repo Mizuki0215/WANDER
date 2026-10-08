@@ -5,6 +5,8 @@
    ══════════════════════════════════════════════════════════ */
 
 :root {
+  /* ⚠️ 暗罩薄嗰陣嘅文字陰影 —— JS 會覆蓋 */
+  --wall-shadow: none;
   --font: 'Noto Sans TC', -apple-system, system-ui, sans-serif;
   --font-pix: 'Press Start 2P', monospace;
   /* ══════════════════════════════════════════════════════
@@ -53,7 +55,9 @@
 
   /* ⚠️ 自訂背景（用戶要求）—— JS 會覆蓋；預設 = 原本嘅 --bg。
      ⚠️ 一定要喺 CSS 定義咗，唔係嘅話 `var(--wallpaper-preset)` 會失效。 */
-  --wallpaper-preset: var(--bg);}
+  --wallpaper-preset: var(--bg);
+  /* ⚠️ 背景暗罩 0–100（用戶要求）—— JS 會覆蓋 */
+  --wall-dim: 55;}
 
 /* ── 銀河紫藍像素（預設）────────────────────────────── */
 [data-theme='galaxy'] {
@@ -1501,13 +1505,74 @@ input { outline: none; }
   background-attachment: fixed;
 }
 
+/* ⚠️⚠️ 暗罩（用戶可以調 0–100）
+   ────────────────────────────────
+   用戶要求：
+     「如果加一啲人嘅相呢，而家嘅透明度就會有啲低囉，
+      即係睇唔到人哋嘅人樣，可唔可以整一個吧上去 tune 佢，
+      由零透明度至到 100% 嘅透明度。」
+
+   ⚠️ `--wall-dim` 由 JS 寫入（0–100）→ 除 100 變 0–1。
+   ⚠️ 分兩層：上半淺啲、下半深啲（下面通常有 nav 同文字）。
+*/
 .wallpaper-scrim {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  /* ⚠️ 兩種情況：
-        · 有相 → 重暗罩（保護文字可讀性）
-        · 冇相 → 透明（preset 自己夠暗） */
+  /* ⚠️ 乘數校準：dim=55 要等於**舊版**嘅 0.72 / 0.86 ——
+        唔係嘅話用戶升級之後背景會突然變光／變暗。
+         · 上：0.72 / 55 = 0.0131
+         · 下：0.86 / 55 = 0.0156
+        ⚠️ dim=100 → 1.31 / 1.56，瀏覽器會 clamp 到 1（全黑）✓
+        ⚠️ dim=0   → 0（完全冇暗罩）✓ */
   background:
-    linear-gradient(180deg, rgba(3, 1, 12, .72) 0%, rgba(3, 1, 12, .86) 100%);
+    linear-gradient(180deg,
+      rgba(3, 1, 12, calc(var(--wall-dim, 55) * 0.0131))
+      0%,
+      rgba(3, 1, 12, calc(var(--wall-dim, 55) * 0.0156))
+      100%);
+  /* ⚠️ 暗罩越薄，字越難睇 —— 用 text-shadow 補救（見下面）*/
+}
+
+/* ⚠️⚠️ 暗罩薄嗰陣，用**文字陰影**令字仲睇得到。
+      為咩唔用更厚嘅暗罩：用戶明確話要睇到人樣。
+      ⚠️ text-shadow 唔會遮住張相，係最好嘅折衷。 */
+:root { --wall-shadow: none; }
+body[data-wallpaper="1"] .app,
+body[data-wallpaper="1"] .screen,
+body[data-wallpaper="1"] h1,
+body[data-wallpaper="1"] h4,
+body[data-wallpaper="1"] .h1 {
+  text-shadow: var(--wall-shadow);
+}
+body[data-wallpaper="1"] .card,
+body[data-wallpaper="1"] .item {
+  /* ⚠️ 卡片加少少背景模糊 —— 相上面都睇得清 */
+  backdrop-filter: blur(3px);
+}
+
+/* ⚠️ 調暗罩嘅滑桿 */
+.wall-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 34px; background: transparent; cursor: pointer;
+}
+.wall-slider::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 3px;
+  background: linear-gradient(90deg, transparent, #000);
+  border: 1px solid var(--border);
+}
+.wall-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 24px; height: 24px; border-radius: 50%; margin-top: -10px;
+  background: var(--neon); border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .5);
+}
+.wall-slider::-moz-range-track {
+  height: 6px; border-radius: 3px;
+  background: linear-gradient(90deg, transparent, #000);
+  border: 1px solid var(--border);
+}
+.wall-slider::-moz-range-thumb {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--neon); border: 2px solid #fff;
 }
 
 /* ⚠️ 內建 preset（由 Wallpaper.jsx 寫入 CSS 變數）*/

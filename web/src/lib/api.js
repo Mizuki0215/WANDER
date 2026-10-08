@@ -233,6 +233,9 @@ export const api = {
   }),
   /** ⚠️ 自訂背景（用戶要求）—— `/uploads/x.jpg` 或 preset key，空字串 = 清走 */
   setWallpaper: (wallpaper) => req('PATCH', '/api/me', { body: { wallpaper } }),
+  /** ⚠️ 背景暗罩 0–100（用戶要求）—— 0 = 睇得最清 */
+  setWallpaperDim: (wallpaper_dim) =>
+    req('PATCH', '/api/me', { body: { wallpaper_dim } }),
   setPassword: (password, current) => req('POST', '/api/me/password', { body: { password, current } }),
   listExpenses: (id) => req('GET', `/api/trips/${id}/expenses`),
   addExpense: (id, body) => req('POST', `/api/trips/${id}/expenses`, { body }),

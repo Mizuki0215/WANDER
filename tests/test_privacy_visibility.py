@@ -326,3 +326,115 @@ class TestQrCamera:
         s = (WEB / "components" / "Friends.jsx").read_text(encoding="utf-8")
         assert "QrCamera" in s, "Friends 冇用 QrCamera"
         assert "開相機掃" in s, "冇相機掣"
+
+
+class TestWallpaperDim:
+    """
+    ⚠️⚠️ 用戶要求：
+       「Wallpaper 嗰度如果加一啲人嘅相呢，而家嘅透明度就會有啲低囉，
+        即係睇唔到人哋嘅人樣，所以呢可唔可以就係你整一個吧上去
+        tune 佢，你要零透明度至到 100% 嘅透明度。」
+
+    ⚠️ 設計：0 = 完全冇暗罩（睇得最清）／100 = 全黑（字最清）
+    """
+
+    def test_schema(self, dbpy):
+        i = dbpy.index("CREATE TABLE IF NOT EXISTS users")
+        blk = dbpy[i:i + 800]
+        assert "wallpaper_dim" in blk, "users 冇 wallpaper_dim"
+
+    def test_migration(self, dbpy):
+        assert '("users", "wallpaper_dim", "INTEGER")' in dbpy
+
+    def test_api_field(self, srv):
+        assert "wallpaper_dim: Optional[int]" in srv, "UpdateMe 冇 wallpaper_dim"
+
+    def test_range_validated(self, srv):
+        """
+        ⚠️⚠️ 一定要 `ge=0, le=100` ——
+           唔係嘅話可以寫入 -1 或者 999。
+        """
+        i = srv.index("wallpaper_dim: Optional[int]")
+        blk = srv[i:i + 200]
+        assert "ge=0" in blk, "冇下限"
+        assert "le=100" in blk, "冇上限"
+
+    def test_me_returns_dim(self, srv):
+        i = srv.index('"wallpaper": user.get("wallpaper")')
+        blk = srv[i:i + 200]
+        assert "wallpaper_dim" in blk, "/api/me 冇回 wallpaper_dim"
+
+    def test_css_uses_variable(self):
+        css = (WEB / "styles.css").read_text(encoding="utf-8")
+        # ⚠️⚠️ 一定要用 `.wallpaper-scrim {`（連大括號）——
+        #    淨係 `.wallpaper-scrim` 會 match 到**我嘅註解**
+        #    （註解入面都有呢個字）。今日第 N 次中。
+        i = css.index(".wallpaper-scrim {")
+        blk = css[i:i + 1200]
+        assert "var(--wall-dim" in blk, "暗罩冇用 CSS 變數"
+        assert "calc(" in blk, "冇 calc"
+
+    def test_css_calibrated(self):
+        """
+        ⚠️⚠️ 乘數一定要校準 —— **dim=55 要等於舊版嘅 0.72 / 0.86**。
+           唔係嘅話用戶升級之後背景會突然變光／變暗。
+        """
+        css = (WEB / "styles.css").read_text(encoding="utf-8")
+        i = css.index(".wallpaper-scrim {")
+        blk = css[i:i + 1200]
+        assert "0.0131" in blk, "上面乘數唔啱（55 × 0.0131 = 0.72）"
+        assert "0.0156" in blk, "下面乘數唔啱（55 × 0.0156 = 0.86）"
+
+    def test_default_matches_old(self):
+        """⚠️ 用數學驗證：dim=55 應該等於舊值。"""
+        assert abs(55 * 0.0131 - 0.72) < 0.01
+        assert abs(55 * 0.0156 - 0.858) < 0.01
+
+    def test_text_shadow_fallback(self):
+        """
+        ⚠️⚠️ 暗罩薄嗰陣字會睇唔到 —— 一定要有**文字陰影**補救。
+           ⚠️ 為咩唔用更厚嘅暗罩：用戶明確話要睇到人樣。
+        """
+        s = (WEB / "components" / "Wallpaper.jsx").read_text(encoding="utf-8")
+        assert "wall-shadow" in s, "冇 text-shadow 補救"
+        assert "d < 45" in s, "冇「暗罩太薄」嘅判斷"
+        css = (WEB / "styles.css").read_text(encoding="utf-8")
+        assert "text-shadow: var(--wall-shadow)" in css, "CSS 冇用 text-shadow"
+
+    def test_slider_exists(self):
+        s = (WEB / "components" / "WallpaperPicker.jsx").read_text(encoding="utf-8")
+        assert 'type="range"' in s, "冇滑桿"
+        assert 'min="0"' in s and 'max="100"' in s, "範圍唔係 0–100"
+
+    def test_slider_only_with_photo(self):
+        """
+        ⚠️ 滑桿只喺**有相**嗰陣出 ——
+           preset 本身已經夠暗，再加暗罩會變全黑。
+        """
+        s = (WEB / "components" / "WallpaperPicker.jsx").read_text(encoding="utf-8")
+        i = s.index('type="range"')
+        blk = s[max(0, i - 600):i]
+        assert "curIsPhoto" in blk, "滑桿唔係只喺有相嗰陣出"
+
+    def test_dim_only_applies_to_photo(self):
+        """
+        ⚠️⚠️ 冇相嗰陣 `--wall-dim` 一定要係 **0** ——
+           唔係 preset 會變全黑。
+        """
+        s = (WEB / "components" / "Wallpaper.jsx").read_text(encoding="utf-8")
+        assert ": 0" in s, "冇「冇相就 dim=0」"
+        i = s.index("const d = isPhoto")
+        blk = s[i:i + 200]
+        assert "0" in blk, "冇處理冇相嗰陣"
+
+    def test_no_api_spam(self):
+        """
+        ⚠️⚠️ 拖滑桿唔可以每個 pixel 都打 API ——
+           用 `onChange` 更新畫面 + `onPointerUp` 才儲存。
+        """
+        s = (WEB / "components" / "WallpaperPicker.jsx").read_text(encoding="utf-8")
+        i = s.index('type="range"')
+        blk = s[i:i + 600]
+        assert "onPointerUp" in blk, "冇喺放手先儲存"
+        # ⚠️ onChange 唔應該直接 call API
+        assert "onChange={e => setDim(" in blk, "onChange 應該只更新畫面"

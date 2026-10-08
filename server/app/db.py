@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS users (
     theme        TEXT DEFAULT 'galaxy',
     -- ⚠️ 自訂 wallpaper（用戶要求）—— `/uploads/xxx.jpg` 或 preset key
     wallpaper    TEXT,
+    -- ⚠️ 背景暗罩 0–100（NULL = 預設 55）
+    wallpaper_dim INTEGER,
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -258,6 +260,13 @@ MIGRATIONS: list[tuple[str, str, str]] = [
     #    ⚠️ 存 `/uploads/xxx.jpg`（自己上載）或者 preset key
     #      （`galaxy` / `none` …）—— 兩種都用同一欄位。
     ("users", "wallpaper", "TEXT"),
+    # ⚠️⚠️ 背景暗罩（用戶要求）
+    #    「Wallpaper 嗰度如果加一啲人嘅相呢，而家嘅透明度就會有啲低囉，
+    #      即係睇唔到人哋嘅人樣，可唔可以整一個吧上去 tune 佢，
+    #      由零透明度至到 100% 嘅透明度。」
+    #    ⚠️ 0 = 完全唔加暗罩（睇得最清，但字可能睇唔到）
+    #       100 = 全黑（字最清，但睇唔到相）
+    ("users", "wallpaper_dim", "INTEGER"),
     # ⚠️⚠️ 購物清單**私人**（用戶要求）
     #    「shopping list 係自己嘅，就算人哋加落去加咗落去呢個
     #      planner 度呢，佢哋應該係睇唔到嘅。」

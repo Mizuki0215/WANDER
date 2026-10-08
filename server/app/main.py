@@ -1323,6 +1323,8 @@ def me(user: dict = Depends(current_user)) -> dict:
             "theme": user.get("theme"),
             # ⚠️ 自訂 wallpaper（用戶要求）
             "wallpaper": user.get("wallpaper"),
+            # ⚠️ 暗罩 0–100（NULL = 前端用預設 55）
+            "wallpaper_dim": user.get("wallpaper_dim"),
             "onboarded": bool(user.get("onboarded")),
             # ⚠️⚠️ 用戶報嘅 bug：
             #   「我個帳號本身係 set 咗一個密碼嘅，所以呢你去改密碼
@@ -1436,6 +1438,8 @@ class UpdateMe(BaseModel):
     # ⚠️ 自訂背景（用戶要求）—— `/uploads/xxx.jpg` 或 preset key
     #    ⚠️ 空字串 = 清走（返返去預設）
     wallpaper: Optional[str] = Field(default=None, max_length=200)
+    # ⚠️ 背景暗罩 0–100（用戶要求）—— 0 = 唔加暗罩（睇得最清）
+    wallpaper_dim: Optional[int] = Field(default=None, ge=0, le=100)
 
 @app.post("/api/me/onboard")
 def finish_onboarding(body: OnboardIn, user: dict = Depends(current_user)) -> dict:
@@ -1484,6 +1488,15 @@ def update_me(body: UpdateMe, user: dict = Depends(current_user)) -> dict:
         ):
             raise HTTPException(400, "背景格式唔啱")
         fields.append("wallpaper = ?"); vals.append(w or None)
+    if getattr(body, "wallpaper_dim", None) is not None:
+        # ⚠️ `ge=0, le=100` 已經擋咗範圍，但都要 int() —— 防字串
+        try:
+            dim = int(body.wallpaper_dim)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "暗罩要係 0–100 嘅數字")
+        if not (0 <= dim <= 100):
+            raise HTTPException(400, "暗罩要係 0–100")
+        fields.append("wallpaper_dim = ?"); vals.append(dim)
     if body.avatar is not None:
         av = body.avatar.strip()
         if av and av not in AVATAR_IDS:

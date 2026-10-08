@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../lib/api'
 import { toast } from '../lib/ui'
-import { PRESETS } from './Wallpaper'
+import { PRESETS, DEFAULT_DIM } from './Wallpaper'
 
 /**
  * 🖼 揀背景
@@ -18,6 +18,9 @@ import { PRESETS } from './Wallpaper'
 export default function WallpaperPicker({ user, onChanged }) {
   const [cur, setCur] = useState(user?.wallpaper || '')
   const [busy, setBusy] = useState(false)
+  // ⚠️⚠️ 暗罩（用戶要求）—— 0 = 睇得最清，100 = 字最清
+  const [dim, setDim] = useState(
+    user?.wallpaper_dim == null ? DEFAULT_DIM : user.wallpaper_dim)
   const curIsPhoto = (cur || '').startsWith('/uploads/')
 
   async function save(value) {
@@ -29,6 +32,19 @@ export default function WallpaperPicker({ user, onChanged }) {
       toast(value ? '背景換好咗 ✓' : '用返預設背景')
     } catch (e) { toast(e.message) }
     finally { setBusy(false) }
+  }
+
+  /**
+   * ⚠️ 儲存暗罩。
+   *
+   *   ⚠️ 拖滑桿嗰陣**唔好**每個 pixel 都打 API ——
+   *      用 `onChange` 更新畫面（即時預覽）+ `onPointerUp` 才儲存。
+   */
+  async function saveDim(v) {
+    try {
+      await api.setWallpaperDim(v)
+      onChanged?.({ wallpaper_dim: v })
+    } catch (e) { toast(e.message) }
   }
 
   /**
@@ -79,6 +95,37 @@ export default function WallpaperPicker({ user, onChanged }) {
             onChange={e => pickPhoto(e.target.files?.[0])} />
         </label>
       </div>
+
+      {/* ⚠️⚠️ 暗罩滑桿（用戶要求）
+             「可唔可以整一個吧上去 tune 佢，
+              由零透明度至到 100% 嘅透明度。」 */}
+      {curIsPhoto && (
+        <div className="card" style={{ marginTop: 12, padding: '10px 12px' }}>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 800, fontSize: 12 }}>🌗 背景暗度</span>
+            <span className="mono" style={{ fontSize: 12, color: 'var(--cyan)' }}>
+              {dim}%
+            </span>
+          </div>
+          <input type="range" className="wall-slider" min="0" max="100" step="5"
+            value={dim}
+            onChange={e => setDim(Number(e.target.value))}
+            onPointerUp={() => saveDim(dim)}
+            onTouchEnd={() => saveDim(dim)}
+            onKeyUp={() => saveDim(dim)}
+            aria-label="背景暗度" />
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <span className="sub" style={{ fontSize: 9.5 }}>0% 睇得最清</span>
+            <span className="sub" style={{ fontSize: 9.5 }}>100% 字最清</span>
+          </div>
+          <div className="sub" style={{ fontSize: 10, marginTop: 6, lineHeight: 1.75 }}>
+            ⚠️ 調得太低，啲字可能會睇唔到。
+            <br />
+            ✅ 低過 45% 我會自動加**文字陰影**幫你補救
+            （唔會遮住你張相）。
+          </div>
+        </div>
+      )}
 
       {curIsPhoto && (
         <button className="btn sm ghost" style={{ marginTop: 8 }}

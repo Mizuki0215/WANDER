@@ -46,19 +46,50 @@ export function presetOf(id) {
  * ⚠️ 一定要放喺 `body::before` **之下**（z-index -1）——
  *    唔係嘅話會蓋住啲 card。
  */
-export default function Wallpaper({ value }) {
+/** ⚠️ 暗罩預設值 —— 相上面要有暗罩，唔係啲字睇唔到。 */
+export const DEFAULT_DIM = 55
+
+export default function Wallpaper({ value, dim }) {
   const [url, setUrl] = useState(null)
 
   useEffect(() => {
     const v = value || ''
-    if (v.startsWith('/uploads/')) setUrl(v)
-    else setUrl(null)
+    const isPhoto = v.startsWith('/uploads/')
+    setUrl(isPhoto ? v : null)
     // ⚠️ 順便將 preset 寫入 CSS 變數（body 用）
-    const p = presetOf(v.startsWith('/uploads/') ? '' : v)
+    const p = presetOf(isPhoto ? '' : v)
     const el = document.documentElement
     if (p.css) el.style.setProperty('--wallpaper-preset', p.css)
     else el.style.removeProperty('--wallpaper-preset')
-  }, [value])
+
+    // ⚠️⚠️ 用戶要求：暗罩要可以調 0–100
+    //    「而家嘅透明度就會有啲低囉，即係睇唔到人哋嘅人樣，
+    //      可唔可以整一個吧上去 tune 佢，
+    //      由零透明度至到 100% 嘅透明度。」
+    //
+    //    ⚠️ 只喺**有相**嗰陣先套用 —— preset 本身已經夠暗，
+    //       再加暗罩會變全黑。
+    const d = isPhoto
+      ? Math.max(0, Math.min(100, Number(dim ?? DEFAULT_DIM) || 0))
+      : 0
+    el.style.setProperty('--wall-dim', String(d))
+
+    // ⚠️⚠️ 暗罩薄嗰陣，字會睇唔到 —— 用**文字陰影**補救。
+    //    ⚠️ 為咩唔用更厚嘅暗罩：用戶明確話要睇到人樣。
+    //       text-shadow 唔會遮住張相，係最好嘅折衷。
+    const shadow = d < 45
+      ? (d < 15
+        // 幾乎冇暗罩 → 重陰影
+        ? '0 1px 3px rgba(0,0,0,.95), 0 0 12px rgba(0,0,0,.85)'
+        // 中等 → 輕陰影
+        : '0 1px 2px rgba(0,0,0,.75)')
+      : 'none'
+    el.style.setProperty('--wall-shadow', shadow)
+
+    // ⚠️ 記得標記「而家有背景相」—— CSS 靠呢個 selector
+    if (isPhoto) document.body.setAttribute('data-wallpaper', '1')
+    else document.body.removeAttribute('data-wallpaper')
+  }, [value, dim])
 
   if (!url) return null
 

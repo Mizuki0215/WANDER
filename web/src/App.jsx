@@ -583,7 +583,7 @@ export default function App() {
   if (user && booted && (!user.onboarded || replayTour)) {
     return (
       <div className="app">
-        <Wallpaper value={user?.wallpaper} />
+        <Wallpaper value={user?.wallpaper} dim={user?.wallpaper_dim} />
       <Stars />
         <HomeScreen
           trips={trips} trip={trip} items={items} stops={stops} user={user}
@@ -608,7 +608,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Wallpaper value={user?.wallpaper} />
+      <Wallpaper value={user?.wallpaper} dim={user?.wallpaper_dim} />
       <Stars />
       <PwaBar />
 
