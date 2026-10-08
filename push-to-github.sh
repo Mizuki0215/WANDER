@@ -25,8 +25,11 @@
 
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
 OWNER="${GITHUB_OWNER:-Mizuki0215}"
 REPO="${GITHUB_REPO:-Wander}"
+OLD_GH="${GITHUB_OLD_NAME:-yeetung-work}"
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
@@ -54,6 +57,81 @@ echo
 # ── ② 收 token（唔 echo）──
 # ══════════════════════════════════════════════════════════════
 # 攞 token
+# ══════════════════════════════════════════════════════════════
+# ✅ 最好嘅方法：`gh` device flow（**完全唔使貼 token**）
+# ══════════════════════════════════════════════════════════════
+#
+# ⚠️⚠️ 為咩要有呢條路：
+#   用戶實測**貼咗 token 落 chat**（`ghp_AIt6z...`）——
+#   我哋兩邊都見到，要即刻撤銷。Token 唔應該經對話。
+#
+#   `gh auth login` 用 GitHub 嘅 **device flow**：
+#     · 終端機顯示一個 8 位 code（例：`ABCD-1234`）
+#     · 你去 https://github.com/login/device 打個 code
+#     · 授權完，`gh` 自己攞 token **存喺本機**
+#   → ⚠️ **token 從來冇出現過喺螢幕或者對話**
+#
+# ⚠️ `brew install gh` 喺呢部機失敗（Cellar 唔可寫）→
+#    我直接下載 binary 落 `.tools/bin/gh`（已 gitignore）。
+GH="$ROOT/.tools/bin/gh"
+if [ -x "$GH" ]; then
+  export GH_CONFIG_DIR="$ROOT/.gh"
+  mkdir -p "$GH_CONFIG_DIR"
+
+  echo "  ┌──────────────────────────────────────────────────────────┐"
+  echo "  │  ✅ 用 GitHub device flow（唔使貼 token）                 │"
+  echo "  └──────────────────────────────────────────────────────────┘"
+  echo
+
+  if ! "$GH" auth status >/dev/null 2>&1; then
+    echo "  ⚠️ 未登入 —— 跟住螢幕做："
+    echo "     ① 佢會顯示一個 code（例：ABCD-1234）"
+    echo "     ② 去 https://github.com/login/device 打個 code"
+    echo "     ③ 授權 → 返嚟呢度會自動繼續"
+    echo
+    "$GH" auth login --hostname github.com --git-protocol https --web
+  fi
+
+  if "$GH" auth status >/dev/null 2>&1; then
+    WHO="$("$GH" api user --jq .login 2>/dev/null || echo "")"
+    echo "  ✓ 登入咗：${WHO:-（未知）}"
+    echo
+    echo "  建立 / 更新 repo $OWNER/$REPO …"
+    # ⚠️ 如果舊名 repo 仲喺，改名
+    if [ "$OLD_GH" != "$REPO" ] && "$GH" repo view "$OWNER/$OLD_GH" >/dev/null 2>&1; then
+      echo "  ⚠️ 發現舊 repo「$OLD_GH」→ 改名做「$REPO」"
+      "$GH" repo rename "$REPO" "$OWNER/$OLD_GH" --yes 2>/dev/null || \
+        echo "     （改名失敗，可能冇權限 —— 跳過）"
+    fi
+    # ⚠️ `--source=. --push` 一次過建 repo + push
+    if "$GH" repo view "$OWNER/$REPO" >/dev/null 2>&1; then
+      echo "  ✓ Repo 已經有 → 直接 push"
+      git remote set-url origin "https://github.com/$OWNER/$REPO.git" 2>/dev/null || \
+        git remote add origin "https://github.com/$OWNER/$REPO.git"
+      git branch -M main
+      git push -u origin main
+    else
+      "$GH" repo create "$REPO" --private --source=. --remote=origin --push \
+        --description "Wander — 旅行計劃 app（純規則引擎，無 AI）"
+    fi
+    echo
+    echo "════════════════════════════════════════════════════════════"
+    echo "  ✅ 推咗！"
+    echo "════════════════════════════════════════════════════════════"
+    echo
+    echo "  https://github.com/$OWNER/$REPO"
+    echo
+    echo "  之後轉 public："
+    echo "    $GH repo edit $OWNER/$REPO --visibility public --accept-visibility-change-consequences"
+    echo "    （或者去 https://github.com/$OWNER/$REPO/settings）"
+    echo
+    echo "  下一步（永久 link）：./deploy.sh"
+    exit 0
+  fi
+  echo "  ⚠️ gh 登入唔成功 —— 退回 token 方法"
+  echo
+fi
+
 # ══════════════════════════════════════════════════════════════
 #
 # ⚠️⚠️ 為咩有三個方法：
