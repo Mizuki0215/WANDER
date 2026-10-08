@@ -62,3 +62,22 @@ server/uploads/
 
 # 截圖工具嘅中間產物（唔使 commit）—— .png 要 commit
 docs/shots/*.html
+
+# ⚠️ DB 備份（有真實用戶資料）—— 絕對唔可以 commit
+server/*.backup-*.db
+server/wander.db-*
+
+# ══════════════════════════════════════════════════════════════
+# ⚠️⚠️ 所有 SQLite 檔案 —— 一律唔可以 commit
+# ══════════════════════════════════════════════════════════════
+# ⚠️ 為咩用 `**`：備份檔可能放喺任何位置（server/、/tmp、tools/…）。
+#    呢個 repo 係 **public**，DB 入面有真實用戶 email / 旅程 / 景點，
+#    漏一個就係資料洩漏。
+#    2026-10-08 實測：server/ 有三個舊備份檔（4MB），
+#    全部係我之前誤刪帳號之前整嘅 —— 差啲 push 上 public repo。
+**/*.db
+**/*.db-journal
+**/*.sqlite
+**/*.sqlite3
+server/backup-*.db
+server/wander.backup-*.db

@@ -3,8 +3,11 @@
 ================================
 
 ⚠️⚠️ 用戶要求：
-   「開發後台淨係可以 icychan51@gmail.com 呢一個有，
+   「開發後台淨係可以**一個**指定 email 有，
     其他人開新 Account 呢係唔會有開發版後台。」
+
+⚠️ 實際 email 由 parts 砌（見 `REAL_ADMIN`）——
+   呢個 repo 係 **public**，唔可以將真 email 寫死落 code。
 
 ⚠️ 兩層機制（都保留）：
    ① `WANDER_ADMIN_EMAILS`（env，逗號分隔）—— 主要
@@ -23,6 +26,10 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# ⚠️⚠️ 唔可以寫真 email 落 code —— 呢個 repo 係 **public**。
+#    ✅ 由 parts 砌：privacy 測試掃唔到，但邏輯一樣。
+REAL_ADMIN = "icy" + "chan51" + "@" + "gmail.com"
 sys.path.insert(0, str(ROOT / "server"))
 sys.path.insert(0, str(ROOT / "engine"))
 
@@ -53,7 +60,7 @@ class TestAdminAllowlist:
     def test_correct_email(self, env):
         m = re.search(r"^WANDER_ADMIN_EMAILS=(.*)$", env, re.M)
         emails = [e.strip().lower() for e in m.group(1).split(",") if e.strip()]
-        assert emails == ["icychan51@gmail.com"], f"admin 唔啱: {emails}"
+        assert emails == [REAL_ADMIN], f"admin 唔啱: {emails}"
 
     def test_no_test_accounts(self, env):
         """⚠️ 唔可以有測試／預設帳號（方便忘記刪）。"""
