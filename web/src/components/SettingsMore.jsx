@@ -345,6 +345,27 @@ export default function SettingsMore({ user, theme, setTheme, onLogout, onReplay
         )}
 
         <Sec open={open} onToggle={toggle} k="about" title="ℹ️ 關於">
+        {/* ⚠️⚠️ 版本 + 強制重新載入
+               ────────────────────────────────
+               用戶報：「shopping list 入唔到去睇」
+
+               ⚠️ 呢類問題**九成係快取舊版**（service worker）——
+                 所以要有：
+                 ① 睇得到自己跑緊邊個版本
+                 ② 一個掣可以清晒 cache 再 reload（唔使教佢去
+                    Safari 設定度撳六層） */}
+        <div className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 10 }}>
+          <span className="sub mono" style={{ fontSize: 10, flex: 1 }}>
+            版本 {typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev'}
+          </span>
+          <button className="btn sm ghost" style={{ fontSize: 11 }}
+            onClick={async () => {
+              const { hardReload } = await import('../lib/pwa')
+              try { await hardReload() } catch { window.location.reload() }
+            }}>
+            ↻ 強制重新載入
+          </button>
+        </div>
         <div className="sub" style={{ lineHeight: 2 }}>
           <div>Wander · 旅行規劃 App</div>
           <div className="mono" style={{ fontSize: 10, opacity: .75 }}>

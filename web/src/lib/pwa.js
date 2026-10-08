@@ -49,8 +49,21 @@ export async function registerSW() {
       })
     })
 
-    // 每小時查一次更新
-    setInterval(() => reg.update().catch(() => {}), 3600_000)
+    // ⚠️⚠️ 用戶報：「shopping list 入唔到去睇」
+    //
+    //   ⚠️ 根因之一：`sw.js` 嘅 `VERSION` 從來冇改 → 瀏覽器
+    //      永遠話「冇更新」→ 用戶一直跑舊版。
+    //      （已修：vite build 時會換 VERSION）
+    //
+    //   ✅ 但**檢查時機**都要夠密：
+    //      · 每隔 5 分鐘（原本一個鐘太疏）
+    //      · **每次切返 app**（PWA 由背景返嚟 —— 用戶最常咁做）
+    setInterval(() => reg.update().catch(() => {}), 5 * 60_000)
+
+    // ⚠️ 切返 app 就查（`visibilitychange` 唔會晒電）
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update().catch(() => {})
+    })
     return reg
   } catch (e) {
     console.warn('[wander] SW 註冊失敗', e)
@@ -63,7 +76,34 @@ export async function registerSW() {
 export function applyUpdate() {
   if (!reg?.waiting) { window.location.reload(); return }
   reg.waiting.postMessage({ type: 'SKIP_WAITING' })
-  navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), { once: true })
+  navigator.serviceWorker.addEventListener(
+    'controllerchange', () => window.location.reload(), { once: true })
+  // ⚠️ Fallback：`controllerchange` 唔一定觸發（舊瀏覽器 / race）——
+  //    1.5 秒後強制 reload，唔好卡死喺舊版。
+  setTimeout(() => window.location.reload(), 1500)
+}
+
+/**
+ * ⚠️⚠️ 清晒所有 cache + 登出 service worker，然後 reload。
+ *
+ *   為咩要：用戶報「入唔到去睇」呢類問題，**九成係快取舊版**。
+ *   一般 `applyUpdate()` 唔夠 —— 要連 cache 都清。
+ *
+ *   ⚠️ 唔會清 localStorage（唔想登出用戶）。
+ */
+export async function hardReload() {
+  try {
+    const keys = await caches.keys()
+    await Promise.all(keys.map(k => caches.delete(k)))
+  } catch {}
+  try {
+    const rs = await navigator.serviceWorker.getRegistrations()
+    await Promise.all(rs.map(r => r.unregister()))
+  } catch {}
+  // ⚠️ cache-busting query（唔係嘅話可能攞返 HTTP cache）
+  const u = new URL(window.location.href)
+  u.searchParams.set('_r', Date.now().toString(36))
+  window.location.replace(u.toString())
 }
 
 /** 問 service worker 拎 cache 狀況。 */
