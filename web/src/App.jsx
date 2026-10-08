@@ -231,6 +231,23 @@ export default function App() {
     })()
   }, [setTheme])
 
+  /**
+   * ⚠️⚠️ 重新攞自己嘅 user（`/api/me`）。
+   *
+   *   為咩要：用戶報「我個帳號本身 set 咗密碼，但 setting 話我
+   *   仲未有密碼」—— 根因係 `/api/me` 冇回 `has_password`。
+   *   修好之後，改完密碼要即刻 refresh 一次，個 UI 先會跟。
+   *   ⚠️ 另外做 fallback：如果後端話「現有密碼唔啱」但前端以為
+   *      冇密碼 → refresh 就出返個「現有密碼」欄。
+   */
+  const refreshMe = useCallback(async () => {
+    try {
+      const r = await api.me()
+      if (r?.user) setUser(r.user)
+      if (r?.trips) setTrips(r.trips)
+    } catch {}
+  }, [])
+
   const refreshTrips = useCallback(async () => {
     const r = await api.me()
     setTrips(r.trips)
@@ -678,6 +695,7 @@ export default function App() {
               isAdmin={isAdmin} onOpenAdmin={() => setShowAdmin(true)}
               onUserUpdate={(u) => setUser(prev => ({ ...prev, ...u }))}
               onReplayTour={() => setReplayTour(true)}
+              onRefresh={refreshMe}
               onLogout={() => { auth.clear(); setUser(null); setTripId(null) }} />
           )}
         </>
@@ -694,6 +712,7 @@ export default function App() {
               isAdmin={isAdmin} onOpenAdmin={() => setShowAdmin(true)}
           onUserUpdate={(u) => setUser(prev => ({ ...prev, ...u }))}
           onReplayTour={() => setReplayTour(true)}
+          onRefresh={refreshMe}
           onLogout={() => { auth.clear(); setUser(null); setTripId(null) }} />
       )}
 

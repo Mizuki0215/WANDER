@@ -36,7 +36,7 @@ import SettingsMore from './SettingsMore'
  */
 
 export default function Settings({ user, theme, setTheme, onLogout, onUserUpdate,
-                                   onReplayTour, isAdmin, onOpenAdmin }) {
+                                   onReplayTour, isAdmin, onOpenAdmin, onRefresh }) {
   const [more, setMore] = useState(false)
   const [editName, setEditName] = useState(false)
   const [name, setName] = useState(user?.display_name || '')
@@ -181,7 +181,7 @@ export default function Settings({ user, theme, setTheme, onLogout, onUserUpdate
       {more && (
         <SettingsMore user={user}
           isAdmin={isAdmin} onOpenAdmin={onOpenAdmin} theme={theme} setTheme={setTheme}
-          onLogout={onLogout} onReplayTour={onReplayTour} />
+          onLogout={onLogout} onReplayTour={onReplayTour} onRefresh={onRefresh} />
       )}
     </div>
   )

@@ -66,7 +66,7 @@ function Sec({ k, open, onToggle, title, hint, children }) {
   )
 }
 
-export default function SettingsMore({ user, theme, setTheme, onLogout, onReplayTour, isAdmin, onOpenAdmin }) {
+export default function SettingsMore({ user, theme, setTheme, onLogout, onReplayTour, isAdmin, onOpenAdmin, onRefresh }) {
   const [pwa, setPwa] = useState({ online: true, registered: false, updateReady: false })
   const [cache, setCache] = useState(null)
   const [checking, setChecking] = useState(false)
@@ -95,9 +95,22 @@ export default function SettingsMore({ user, theme, setTheme, onLogout, onReplay
       await api.setPassword(pw1, pw0 || undefined)
       toast('密碼已儲存 ✓')
       setPw0(''); setPw1(''); setPw2('')
-      const me = await api.me()
-      if (me?.user) toast('已更新')
-    } catch (e) { toast(e.message) }
+      // ⚠️⚠️ 一定要重新攞 `/api/me` ——
+      //    舊 bug：`/api/me` 冇回 `has_password` →
+      //    改完密碼之後個 UI **仲係**顯示「未設定」。
+      onRefresh?.()
+    } catch (e) {
+      // ⚠️⚠️ Fallback：如果後端話「現有密碼唔啱」但我哋以為冇密碼，
+      //    即係 `has_password` 同後端唔一致（例如舊 session）。
+      //    → 強制 refresh 一次，個「現有密碼」欄就會出返。
+      //    （唔係嘅話用戶會卡住：見到「未設定」但點改都話密碼唔啱。）
+      if (/現有密碼/.test(e.message || '')) {
+        onRefresh?.()
+        toast('呢個帳號已經有密碼 —— 請填「現有密碼」再試')
+      } else {
+        toast(e.message)
+      }
+    }
     finally { setPwBusy(false) }
   }
 

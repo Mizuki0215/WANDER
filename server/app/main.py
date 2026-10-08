@@ -1263,6 +1263,17 @@ def me(user: dict = Depends(current_user)) -> dict:
             "avatar": user.get("avatar"),
             "theme": user.get("theme"),
             "onboarded": bool(user.get("onboarded")),
+            # ⚠️⚠️ 用戶報嘅 bug：
+            #   「我個帳號本身係 set 咗一個密碼嘅，所以呢你去改密碼
+            #    嘅時候呢，例如去 setting，佢冇理由會同你講你仲未
+            #    有密碼。我覺得呢個要改。」
+            #
+            #   ⚠️ 根因：`/api/me` **根本冇回 `has_password`** ——
+            #      前端 `user.has_password` 永遠 `undefined`（falsy）
+            #      → Settings 永遠顯示「未設定」。
+            #      （`_issue_session()` 有計，但嗰個係登入回嘅，
+            #        `/api/me` 冇跟。）
+            "has_password": bool(user.get("password_hash")),
         },
         "trips": trips,
     }
