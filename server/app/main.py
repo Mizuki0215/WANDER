@@ -2767,6 +2767,216 @@ def admin_me(user: dict = Depends(current_user)) -> dict:
     return {"admin": _is_admin(user)}
 
 
+# ══════════════════════════════════════════════════════════════
+# 後台：數據管理（用戶要求「我想有個後台去管理數據」）
+# ══════════════════════════════════════════════════════════════
+
+@app.get("/api/admin/users")
+def admin_users(q: str = "", limit: int = 50, offset: int = 0,
+                user: dict = Depends(admin_user)) -> dict:
+    """
+    用戶清單（可以搜尋）。
+
+    ⚠️ 只回**必要**欄位 —— 唔好將 `password_hash` 之類嘅嘢送出街。
+    """
+    limit = max(1, min(200, limit))
+    with db.connect() as conn:
+        where, vals = "", []
+        if (q or "").strip():
+            where = "WHERE u.email LIKE ? OR u.username LIKE ? OR u.display_name LIKE ?"
+            like = f"%{q.strip()}%"
+            vals = [like, like, like]
+        total = conn.execute(
+            f"SELECT COUNT(*) c FROM users u {where}", vals).fetchone()["c"]
+        rows = conn.execute(f"""
+            SELECT u.id, u.email, u.username, u.display_name, u.avatar,
+                   u.is_admin, u.onboarded, u.created_at,
+                   (SELECT COUNT(*) FROM trips t WHERE t.owner_id = u.id) AS owned,
+                   (SELECT COUNT(*) FROM members m WHERE m.user_id = u.id) AS member_of,
+                   (SELECT COUNT(*) FROM items i WHERE i.created_by = u.id) AS items_made
+            FROM users u {where}
+            ORDER BY u.created_at DESC LIMIT ? OFFSET ?""",
+            (*vals, limit, offset)).fetchall()
+    return {"total": total, "limit": limit, "offset": offset,
+            "users": db.rows_to_list(rows)}
+
+
+@app.get("/api/admin/trips")
+def admin_trips(q: str = "", limit: int = 50, offset: int = 0,
+                user: dict = Depends(admin_user)) -> dict:
+    """旅程清單（可以搜尋）。"""
+    limit = max(1, min(200, limit))
+    with db.connect() as conn:
+        where, vals = "", []
+        if (q or "").strip():
+            where = "WHERE t.name LIKE ? OR t.destination LIKE ?"
+            like = f"%{q.strip()}%"
+            vals = [like, like]
+        total = conn.execute(
+            f"SELECT COUNT(*) c FROM trips t {where}", vals).fetchone()["c"]
+        rows = conn.execute(f"""
+            SELECT t.id, t.name, t.destination, t.days, t.currency,
+                   t.start_date, t.created_at, t.invite_code,
+                   u.email AS owner_email,
+                   (SELECT COUNT(*) FROM members m WHERE m.trip_id = t.id) AS members,
+                   (SELECT COUNT(*) FROM items i WHERE i.trip_id = t.id) AS items,
+                   (SELECT COUNT(*) FROM shopping_items s WHERE s.trip_id = t.id) AS shopping,
+                   (SELECT COUNT(*) FROM expenses e WHERE e.trip_id = t.id) AS expenses
+            FROM trips t LEFT JOIN users u ON u.id = t.owner_id
+            {where}
+            ORDER BY t.created_at DESC LIMIT ? OFFSET ?""",
+            (*vals, limit, offset)).fetchall()
+    return {"total": total, "limit": limit, "offset": offset,
+            "trips": db.rows_to_list(rows)}
+
+
+class AdminDeleteBody(BaseModel):
+    confirm: str = ""
+
+
+@app.delete("/api/admin/users/{user_id}")
+def admin_delete_user(user_id: str, confirm: str = "",
+                      user: dict = Depends(admin_user)) -> dict:
+    """
+    刪除用戶（⚠️ 破壞性）。
+
+    ⚠️⚠️ 兩個保護：
+       ① 一定要打 `confirm=<email>`（唔可以淨係撳一下就冇咗）
+       ② **唔可以刪自己**（會將自己鎖出後台）
+    ⚠️ 同 `tools/manage_account.py` 一樣：
+       先**轉移**旅程擁有權，再刪佢冇其他成員嘅旅程。
+    """
+    with db.connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "搵唔到呢個用戶")
+        target = dict(row)
+        if target["id"] == user["id"]:
+            raise HTTPException(400, "唔可以刪自己")
+        if (confirm or "").strip() != target["email"]:
+            raise HTTPException(400, f"要打「{target['email']}」確認")
+
+        # ① 轉移旅程擁有權（畀最早加入嘅其他成員）
+        for t in conn.execute("SELECT id FROM trips WHERE owner_id=?",
+                              (user_id,)).fetchall():
+            nxt = conn.execute(
+                """SELECT user_id FROM members WHERE trip_id=? AND user_id<>?
+                   ORDER BY rowid LIMIT 1""", (t["id"], user_id)).fetchone()
+            if nxt:
+                conn.execute("UPDATE trips SET owner_id=? WHERE id=?",
+                             (nxt["user_id"], t["id"]))
+        # ② 轉移 item 作者
+        for t in conn.execute("SELECT id FROM trips WHERE owner_id=?",
+                              (user_id,)).fetchall():
+            pass
+        conn.execute(
+            """UPDATE items SET created_by = (
+                   SELECT user_id FROM members
+                   WHERE trip_id = items.trip_id AND user_id <> ?
+                   ORDER BY rowid LIMIT 1)
+               WHERE created_by = ?""", (user_id, user_id))
+        # ③ 刪佢冇其他成員嘅旅程（連內容）
+        keep = [r["id"] for r in conn.execute(
+            """SELECT t.id FROM trips t
+               WHERE t.owner_id=?
+                 AND EXISTS (SELECT 1 FROM members m
+                             WHERE m.trip_id=t.id AND m.user_id<>?)""",
+            (user_id, user_id)).fetchall()]
+        if keep:
+            ph = ",".join("?" * len(keep))
+            for tbl in ("items", "trip_stops", "shopping_items", "expenses",
+                        "votes"):
+                try:
+                    conn.execute(f"DELETE FROM {tbl} WHERE trip_id NOT IN ({ph}) "
+                                 f"AND trip_id IN (SELECT id FROM trips WHERE owner_id=?)",
+                                 (*keep, user_id))
+                except Exception:
+                    pass
+        conn.execute(
+            """DELETE FROM trips WHERE owner_id=? AND id NOT IN
+               (SELECT trip_id FROM members WHERE user_id<>?)""",
+            (user_id, user_id))
+        # ④ 清其他關聯
+        for sql in (
+            "DELETE FROM members WHERE user_id=?",
+            "DELETE FROM friends WHERE user_id=? OR friend_id=?",
+            "DELETE FROM friend_requests WHERE from_id=? OR to_id=?",
+            "DELETE FROM sessions WHERE user_id=?",
+            "DELETE FROM events WHERE user_id=?",
+            "DELETE FROM items WHERE created_by=?",
+        ):
+            try:
+                n = sql.count("?")
+                conn.execute(sql, tuple([user_id] * n))
+            except Exception:
+                pass
+        # ⑤ 最後先刪用戶
+        conn.execute("DELETE FROM users WHERE id=?", (user_id,))
+    return {"ok": True, "deleted": target["email"]}
+
+
+@app.delete("/api/admin/trips/{trip_id}")
+def admin_delete_trip(trip_id: str, confirm: str = "",
+                      user: dict = Depends(admin_user)) -> dict:
+    """刪除旅程（⚠️ 破壞性，要打旅程名確認）。"""
+    with db.connect() as conn:
+        row = conn.execute("SELECT * FROM trips WHERE id=?", (trip_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "搵唔到呢個旅程")
+        t = dict(row)
+        if (confirm or "").strip() != (t.get("name") or ""):
+            raise HTTPException(400, f"要打「{t.get('name')}」確認")
+        conn.execute("DELETE FROM trips WHERE id=?", (trip_id,))
+    return {"ok": True, "deleted": t.get("name")}
+
+
+@app.get("/api/admin/export")
+def admin_export(what: str = "summary", user: dict = Depends(admin_user)) -> dict:
+    """
+    匯出數據（JSON）。
+
+    ⚠️⚠️ **唔會**匯出 `password_hash` —— 就算係 admin 都唔應該見到。
+    """
+    with db.connect() as conn:
+        if what == "users":
+            rows = conn.execute(
+                """SELECT id, email, username, display_name, avatar, is_admin,
+                          onboarded, created_at FROM users
+                   ORDER BY created_at""").fetchall()
+            return {"what": "users", "count": len(rows),
+                    "rows": db.rows_to_list(rows)}
+        if what == "trips":
+            rows = conn.execute(
+                """SELECT id, name, destination, days, currency, start_date,
+                          end_date, owner_id, created_at FROM trips
+                   ORDER BY created_at""").fetchall()
+            return {"what": "trips", "count": len(rows),
+                    "rows": db.rows_to_list(rows)}
+        if what == "items":
+            rows = conn.execute(
+                """SELECT id, trip_id, name, category, country, district,
+                          lat, lng, confidence, day_index, created_at
+                   FROM items ORDER BY created_at""").fetchall()
+            return {"what": "items", "count": len(rows),
+                    "rows": db.rows_to_list(rows)}
+    # summary
+    with db.connect() as conn:
+        def n(sql):
+            try:
+                return conn.execute(sql).fetchone()[0]
+            except Exception:
+                return 0
+        return {"what": "summary", "counts": {
+            "users": n("SELECT COUNT(*) FROM users"),
+            "trips": n("SELECT COUNT(*) FROM trips"),
+            "items": n("SELECT COUNT(*) FROM items"),
+            "shopping": n("SELECT COUNT(*) FROM shopping_items"),
+            "expenses": n("SELECT COUNT(*) FROM expenses"),
+            "events": n("SELECT COUNT(*) FROM events"),
+            "friends": n("SELECT COUNT(*) FROM friends"),
+        }}
+
+
 @app.get("/api/admin/overview")
 def admin_overview(days: int = 30, user: dict = Depends(admin_user)) -> dict:
     """

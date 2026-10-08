@@ -215,6 +215,8 @@ export default function Admin({ onBack }) {
       {/*   ⚠️⚠️ 用戶問：「未設定 SMTP 你係諗住點搞？」
               答：冇 SMTP 就寄唔到驗證碼 → 用邀請碼。
               呢個就係產生邀請碼嘅地方。 */}
+      <DataManager />
+
       <MailTest />
 
       <Invites />
@@ -401,6 +403,204 @@ function MailTest() {
           {res.sent
             ? <>✓ 已寄去 <b>{res.to}</b> —— 去 check 收件箱（同 spam）</>
             : <>✗ 寄唔到：{res.error || '未知原因'}</>}
+        </div>
+      )}
+    </Sec>
+  )
+}
+
+/**
+ * 🗄️ 數據管理（用戶要求）
+ * ========================
+ *
+ * ⚠️⚠️ 用戶原話：
+ *   「同埋我想有個後台去管理數據喎，你幾時整呀？」
+ *
+ * ⚠️ 設計原則：
+ *   ① **搜尋先** —— 119 個用戶／78 個旅程唔可以一次過列出嚟
+ *   ② ⚠️⚠️ **刪除要打名確認** —— 唔可以撳一下就近冇
+ *      （我今日已經試過兩次誤刪用戶資料）
+ *   ③ ⚠️ **唔可以刪自己** —— 會將自己鎖出後台
+ *   ④ 匯出**唔包** `password_hash`
+ */
+function DataManager() {
+  const [tab, setTab] = useState('users')     // users | trips | export
+  const [q, setQ] = useState('')
+  const [d, setD] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [del, setDel] = useState(null)        // {kind, id, name, typed}
+
+  async function load(which = tab, query = q) {
+    setBusy(true)
+    try {
+      setD(which === 'users'
+        ? await api.adminUsers(query)
+        : which === 'trips' ? await api.adminTrips(query)
+        : await api.adminExport('summary'))
+    } catch (e) { toast(e.message) }
+    finally { setBusy(false) }
+  }
+  useEffect(() => { load(tab, q) }, [tab])   // eslint-disable-line
+
+  async function doDelete() {
+    if (!del) return
+    try {
+      if (del.kind === 'user') await api.adminDeleteUser(del.id, del.typed)
+      else await api.adminDeleteTrip(del.id, del.typed)
+      toast(`已刪除「${del.name}」`)
+      setDel(null)
+      await load()
+    } catch (e) { toast(e.message) }
+  }
+
+  async function download(what) {
+    try {
+      const r = await api.adminExport(what)
+      const blob = new Blob([JSON.stringify(r, null, 2)], { type: 'application/json' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `wander-${what}-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(a.href)
+      toast(`匯出咗 ${r.count ?? ''} 筆`)
+    } catch (e) { toast(e.message) }
+  }
+
+  return (
+    <Sec title="🗄️ 數據管理">
+      {/* ⚠️ 分頁 */}
+      <div className="chips" style={{ marginBottom: 10 }}>
+        {[['users', '👥 用戶'], ['trips', '🗂 旅程'], ['export', '📤 匯出']]
+          .map(([k, label]) => (
+            <button key={k} className={`chip ${tab === k ? 'on' : ''}`}
+              style={{ fontSize: 11 }} onClick={() => setTab(k)}>{label}</button>
+          ))}
+      </div>
+
+      {tab !== 'export' && (
+        <div className="row" style={{ gap: 7, marginBottom: 10 }}>
+          <input className="input" value={q} style={{ flex: 1 }}
+            placeholder={tab === 'users' ? '搵 email / 帳號名 / 名' : '搵旅程名 / 目的地'}
+            onChange={e => setQ(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && load()} />
+          <button className="btn sm" onClick={() => load()} disabled={busy}>
+            {busy ? '…' : '搵'}
+          </button>
+        </div>
+      )}
+
+      {/* ══ 匯出 ══ */}
+      {tab === 'export' && (
+        <>
+          <div className="sub" style={{ fontSize: 11.5, lineHeight: 1.85 }}>
+            ⚠️ 匯出係 JSON。**唔會**包含密碼 hash。
+          </div>
+          <div className="row" style={{ gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
+            {[['users', '👥 用戶'], ['trips', '🗂 旅程'],
+              ['items', '📍 景點'], ['summary', '📊 統計']]
+              .map(([k, label]) => (
+                <button key={k} className="btn sm" onClick={() => download(k)}>
+                  {label}
+                </button>
+              ))}
+          </div>
+          {d?.counts && (
+            <div className="mono sub" style={{ fontSize: 11, marginTop: 12, lineHeight: 2 }}>
+              {Object.entries(d.counts).map(([k, v]) =>
+                <div key={k}>{k}: {v}</div>)}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ══ 用戶 ══ */}
+      {tab === 'users' && d?.users && (
+        <>
+          <div className="sub" style={{ fontSize: 10.5, marginBottom: 6 }}>
+            共 {d.total} 個 · 顯示 {d.users.length}
+          </div>
+          {d.users.map(u => (
+            <div key={u.id} className="item" style={{ alignItems: 'center' }}>
+              <div className="ic">{u.avatar || '🙂'}</div>
+              <div className="info">
+                <h4>{u.display_name || u.email}
+                  {u.is_admin ? <span className="chip" style={{ fontSize: 9, marginLeft: 5 }}>admin</span> : null}
+                </h4>
+                <p className="mono" style={{ fontSize: 10 }}>
+                  {u.email}{u.username ? ` · @${u.username}` : ''}
+                </p>
+                <p style={{ fontSize: 10 }}>
+                  擁有 {u.owned} 旅程 · 成員 {u.member_of} · 加過 {u.items_made} 景點
+                </p>
+              </div>
+              <button className="btn sm ghost"
+                style={{ padding: '4px 8px', fontSize: 11, color: 'var(--bad)' }}
+                onClick={() => setDel({ kind: 'user', id: u.id,
+                                        name: u.email, typed: '' })}>刪</button>
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* ══ 旅程 ══ */}
+      {tab === 'trips' && d?.trips && (
+        <>
+          <div className="sub" style={{ fontSize: 10.5, marginBottom: 6 }}>
+            共 {d.total} 個 · 顯示 {d.trips.length}
+          </div>
+          {d.trips.map(t => (
+            <div key={t.id} className="item" style={{ alignItems: 'center' }}>
+              <div className="ic">🗂</div>
+              <div className="info">
+                <h4>{t.name}</h4>
+                <p style={{ fontSize: 10 }}>
+                  {t.destination || '冇目的地'} · {t.days} 日 · {t.currency || 'HKD'}
+                </p>
+                <p className="mono" style={{ fontSize: 9.5 }}>
+                  {t.owner_email} · 👥{t.members} 📍{t.items} 🛒{t.shopping} 💸{t.expenses}
+                </p>
+              </div>
+              <button className="btn sm ghost"
+                style={{ padding: '4px 8px', fontSize: 11, color: 'var(--bad)' }}
+                onClick={() => setDel({ kind: 'trip', id: t.id,
+                                        name: t.name, typed: '' })}>刪</button>
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* ══ ⚠️⚠️ 刪除確認（要打名）══ */}
+      {del && (
+        <div onClick={() => setDel(null)} style={{
+          position: 'fixed', inset: 0, zIndex: 99, background: 'rgba(0,0,0,.72)',
+          backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', padding: 18,
+        }}>
+          <div onClick={e => e.stopPropagation()} className="card"
+            style={{ maxWidth: 420, width: '100%', borderColor: 'var(--bad)' }}>
+            <div style={{ fontWeight: 900, fontSize: 15, color: 'var(--bad)' }}>
+              ⚠️ 刪除{del.kind === 'user' ? '用戶' : '旅程'}
+            </div>
+            <div className="sub" style={{ fontSize: 12, marginTop: 8, lineHeight: 1.85 }}>
+              呢個**唔可以復原**。<br />
+              {del.kind === 'user'
+                ? '佢嘅旅程會**轉移**畀其他成員；冇其他成員嘅旅程會連內容一齊刪。'
+                : '旅程入面嘅景點、購物清單、開支**全部**會冇。'}
+            </div>
+            <div className="sub" style={{ fontSize: 11.5, marginTop: 12 }}>
+              打「<b className="mono">{del.name}</b>」確認：
+            </div>
+            <input className="input" autoFocus value={del.typed}
+              onChange={e => setDel({ ...del, typed: e.target.value })}
+              style={{ marginTop: 6 }} />
+            <div className="row" style={{ gap: 8, marginTop: 12 }}>
+              <button className="btn ghost" style={{ flex: 1 }}
+                onClick={() => setDel(null)}>取消</button>
+              <button className="btn primary" style={{ flex: 1, background: 'var(--bad)' }}
+                disabled={del.typed !== del.name}
+                onClick={doDelete}>確定刪除</button>
+            </div>
+          </div>
         </div>
       )}
     </Sec>

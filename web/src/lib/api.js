@@ -187,6 +187,19 @@ export const api = {
   makeInvites: (count = 1, note = '', days = 30) =>
     req('POST', '/api/admin/signup-invites', { body: { count, note, days } }),
   adminOverview: (days = 30) => req('GET', '/api/admin/overview', { params: { days } }),
+
+  // ── 後台：數據管理（用戶要求「我想有個後台去管理數據」）──
+  adminUsers: (q = '', limit = 50, offset = 0) =>
+    req('GET', '/api/admin/users', { params: { q, limit, offset } }),
+  adminTrips: (q = '', limit = 50, offset = 0) =>
+    req('GET', '/api/admin/trips', { params: { q, limit, offset } }),
+  adminExport: (what = 'summary') =>
+    req('GET', '/api/admin/export', { params: { what } }),
+  /** ⚠️ DELETE 要帶 confirm（打 email／旅程名）—— 唔可以淨係撳一下 */
+  adminDeleteUser: (id, confirm) =>
+    req('DELETE', `/api/admin/users/${id}`, { params: { confirm } }),
+  adminDeleteTrip: (id, confirm) =>
+    req('DELETE', `/api/admin/trips/${id}`, { params: { confirm } }),
   /** ⚠️ 回報使用事件 —— 一定要 catch，唔可以影響主流程。 */
   track: (kind, target) => req('POST', '/api/events', { body: { kind, target } })
     .catch(() => {}),
