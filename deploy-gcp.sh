@@ -93,10 +93,34 @@ say "Project：${B}${PROJECT}${N}"
 # ⚠️⚠️ 一定要設 budget alert —— 唔係嘅話超出免費額度會靜靜收錢
 say "確認 billing…"
 if ! gcloud billing projects describe "$PROJECT" >/dev/null 2>&1; then
-  warn "冇 billing account —— 要先去 console 開（免費額度都要）"
-  warn "  https://console.cloud.google.com/billing"
-  die "請開咗 billing 再跑"
+  # ⚠️⚠️ 兩種情況：
+  #    ① 完全冇 billing account → 要用戶去 console 開（要卡）
+  #    ② 有 account 但**未連結**落呢個 project → 可以自動連結
+  #    （實測：用戶開咗 account 但冇 link，卡咗好耐）
+  BA="$(gcloud billing accounts list --filter='open=true' \
+         --format='value(name)' 2>/dev/null | head -1 | sed 's|billingAccounts/||')"
+  if [ -n "$BA" ]; then
+    warn "Billing account「${BA}」未連結落 ${PROJECT} → 自動連結…"
+    if gcloud billing projects link "$PROJECT" --billing-account="$BA" --quiet; then
+      say "✓ 連結好咗"
+    else
+      warn "自動連結失敗 —— 要手動："
+      echo "    gcloud billing projects link $PROJECT --billing-account=$BA"
+      die "或者去 https://console.cloud.google.com/billing/linkedaccount?project=$PROJECT"
+    fi
+  else
+    warn "完全冇 billing account —— 要先去 console 開（免費額度都要卡）"
+    warn "  https://console.cloud.google.com/billing"
+    echo
+    echo "  ${B}做法：${N}"
+    echo "    ① 撳上面條 link → 「建立帳單帳戶」"
+    echo "    ② 加信用卡（⚠️ e2-micro 永久免費，唔會收錢）"
+    echo "    ③ 開完再跑呢個 script（會自動連結）"
+    die "請開咗 billing 再跑"
+  fi
 fi
+say "Billing：$(gcloud billing projects describe "$PROJECT" \
+      --format='value(billingAccountName)' 2>/dev/null | sed 's|billingAccounts/||')"
 
 # ── ② API ──────────────────────────────────────────────────────
 say "開 API（compute）…"
