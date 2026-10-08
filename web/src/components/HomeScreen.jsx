@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
+import WorldClocks from './WorldClocks'
 import Avatar from './Avatar'
 import PixelIcon from './PixelIcon'
-import DualClock from './DualClock'
 
 /**
  * 手機主畫面（Home Screen）
@@ -129,15 +129,20 @@ export default function HomeScreen({ trip, items, stops, onOpen, onPickTrip, onN
       display: 'flex', flexDirection: 'column',
     }}>
       {/* ══ 時鐘 ══ */}
-      {/*   ⚠️⚠️ 用 DualClock 而唔係直接顯示手機時間 ——
-             用戶問：「你去旅行嘅話就會入唔同嘅時區呀嘛」
+      {/*   ⚠️⚠️ 用戶要求（改過設計）：
+             「Show 兩個時區囉，第一個最上面嗰個係**手機時間**，
+              第二個就係有得比你揀 —— 你可以輸入嗰個城市嘅名，
+              用英文或者中文都可以，之後呢例如你揀咗，
+              然後就會有對應嘅時區。」
 
-             如果有揀旅程 → 大鐘顯示**目的地**時間（你想知嗰度幾點），
-                          細細行顯示**你身處**時間。
-             冇旅程／同時區 → 只顯示一個鐘（唔好重複）。 */}
+           ⚠️ 所以係（同之前**相反**）：
+              · **上面大字 = 你手機嘅時間**（你身處嗰度）
+              · **下面細字 = 你揀嘅城市**（可以改，用 CityPicker）
+           ⚠️ 之前係反過嚟（目的地做大字），用戶話唔啱。
+           ⚠️ 揀咗嘅城市記喺 localStorage，唔使每次再揀。 */}
       <div style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 20 }}>
-        <DualClock timezone={stops?.[0]?.timezone}
-          label={stops?.[0]?.city} />
+        <WorldClocks tripCity={stops?.[0]?.city}
+          tripTz={stops?.[0]?.timezone} />
         <div className="row" style={{ justifyContent: 'center', gap: 7, marginTop: 10 }}>
           <Avatar id={user?.avatar} size={24} />
           <span className="sub" style={{ fontSize: 11.5 }}>

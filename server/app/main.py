@@ -1802,6 +1802,60 @@ def parse(body: ParseRequest, user: dict = Depends(current_user)) -> dict:
     }
 
 
+@app.get("/api/tz")
+def api_tz(city: str, user: dict = Depends(current_user)) -> dict:
+    """
+    城市 → 時區。
+
+    ⚠️⚠️ 用戶要求：
+       「第二個就係有得比你揀 —— 你可以輸入嗰個城市嘅名，
+        用英文或者中文都可以，之後呢例如你揀咗，
+        然後就會有對應嘅時區。」
+
+    ⚠️ 為咩要獨立一個 endpoint：
+       世界時鐘唔一定要有旅程（冇旅程都想睇其他城市幾點）。
+       ⚠️ 亦都唔應該為咗攞個時區而建立一個 trip_stop。
+
+    回：{"city","matched","tz","source","confident","country"}
+    """
+    from wander.localgeo import search
+    from wander.tz import lookup as tz_lookup
+
+    q = (city or "").strip()
+    if len(q) < 2:
+        raise HTTPException(400, "城市名太短")
+
+    hits = search(q, limit=1) or []
+    if not hits:
+        raise HTTPException(404, f"搵唔到「{q}」")
+
+    # ⚠️ `localgeo.search()` 回 **dict** 而唔係 object
+    #    （{"query","matched","lat","lng","country","population"}）
+    c = hits[0]
+    # ⚠️⚠️ `localgeo.search()` **冇回** country_code（只有中文國名）
+    #    → 要用 `_zh_to_cc("日本")` 反查 "JP"。
+    #    ⚠️ `_zh_to_cc` 係**函數**（接收一個中文名），
+    #       唔係回一個 dict —— 我第一版寫錯咗，搞到成日 fallback 去
+    #       `Etc/GMT-9`（功能啱但唔靚，前端顯示唔到「東京」）。
+    try:
+        from wander.localgeo import _zh_to_cc
+        cc = _zh_to_cc(c.get("country") or "")
+    except Exception:
+        cc = None
+    tz = tz_lookup(c.get("lat"), c.get("lng"), cc)
+    return {
+        "city": q,
+        "matched": c.get("matched") or c.get("query") or q,
+        "country": c.get("country"),
+        "lat": c.get("lat"),
+        "lng": c.get("lng"),
+        "tz": tz.get("tz"),
+        "source": tz.get("source"),
+        # ⚠️ `confident=False` → 前端要顯示「約」
+        "confident": bool(tz.get("confident")),
+    }
+
+
 @app.get("/api/lookup")
 def lookup(name: str, hint: Optional[str] = None,
            user: dict = Depends(current_user)) -> dict:

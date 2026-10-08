@@ -134,3 +134,125 @@ class TestFrontendRefreshesUser:
         assert "更改密碼" in s, "冇「更改密碼」標籤"
         assert "現有密碼" in s, "冇「現有密碼」欄"
         assert "user?.has_password" in s, "冇用 has_password 做判斷"
+
+
+# ══════════════════════════════════════════════════════════════
+# ⑥ 世界時鐘（用戶要求：上面手機時間，下面自選城市）
+# ══════════════════════════════════════════════════════════════
+
+class TestWorldClocks:
+    """
+    ⚠️⚠️ 用戶要求（我原本做錯方向，佢糾正咗）：
+       「Show 兩個時區囉，第一個最上面嗰個係**手機時間**，
+        第二個就係有得比你揀 —— 你可以輸入嗰個城市嘅名，
+        用英文或者中文都可以，之後呢例如你揀咗，
+        然後就會有對應嘅時區。」
+
+    ⚠️ 之前係反過嚟（**目的地**做大字）—— 用戶話唔啱。
+    """
+
+    @pytest.fixture(scope="class")
+    def wc(self):
+        p = WEB / "components" / "WorldClocks.jsx"
+        assert p.exists(), "冇 WorldClocks.jsx"
+        return code(p)
+
+    def test_exists_and_used(self):
+        home = code(WEB / "components" / "HomeScreen.jsx")
+        assert "<WorldClocks" in home, "HomeScreen 冇用 WorldClocks"
+        assert "DualClock" not in home, "仲用緊 DualClock（舊設計）"
+
+    def test_phone_time_is_big_first(self, wc):
+        """
+        ⚠️⚠️ 核心：**手機時間**做大字（`fontSize: 46`），
+           唔可以係目的地做大字。
+        """
+        # ⚠️ 大鐘嗰段要喺細鐘之前
+        assert "你嘅時間" in wc, "冇標明「你嘅時間」"
+        i_big = wc.index("你嘅時間")
+        i_small = wc.index("target && !editing")
+        assert i_big < i_small, "手機時間唔係喺最上面"
+
+    def test_second_clock_is_pickable(self, wc):
+        """⚠️ 第二個鐘要**揀得**（用 CityPicker）。"""
+        assert "CityPicker" in wc, "冇 CityPicker"
+        assert "setEditing(true)" in wc, "冇得撳去改城市"
+
+    def test_persists_pick(self, wc):
+        """⚠️ 揀咗嘅城市要記住（唔使每次再揀）。"""
+        assert "localStorage" in wc, "冇存 localStorage"
+        assert "wander.worldclock" in wc, "冇固定 key"
+
+    def test_hides_when_same_zone(self, wc):
+        """⚠️ 同一時區唔應該出兩個一樣嘅鐘。"""
+        assert "sameZone" in wc, "冇用 sameZone"
+        assert "同你同一個時區" in wc, "冇處理同時區"
+
+    def test_no_trip_needed(self, wc):
+        """
+        ⚠️ 世界時鐘**唔應該**一定要有旅程 ——
+           冇旅程都想睇其他城市幾點。
+        """
+        assert "加世界時鐘" in wc, "冇「加世界時鐘」掣（一定要有旅程？）"
+
+    def test_shows_offset(self, wc):
+        """⚠️ 要顯示快／慢幾個鐘（一眼睇到差幾多）。"""
+        assert "快 " in wc and "慢 " in wc, "冇顯示時差"
+
+
+class TestTimezoneApi:
+    """
+    ⚠️ 為咩要獨立 `/api/tz`：
+       · 世界時鐘唔一定要有旅程
+       · ⚠️ 唔應該為咗攞個時區而建立 trip_stop
+       · ⚠️ `/api/lookup` 係「店名反查」（會打 Photon/Nominatim，貴）
+         `/api/tz` 用本機 134k 城市庫，唔使網絡
+    """
+
+    def test_endpoint_exists(self):
+        s = (ROOT / "server" / "app" / "main.py").read_text(encoding="utf-8")
+        assert '@app.get("/api/tz")' in s, "冇 /api/tz"
+
+    def test_before_spa_fallback(self):
+        s = (ROOT / "server" / "app" / "main.py").read_text(encoding="utf-8")
+        stripped = "\n".join(l for l in s.split("\n")
+                             if not l.strip().startswith("#"))
+        assert stripped.index('"/api/tz"') < \
+               stripped.index('@app.get("/{full_path:path}")'), \
+            "/api/tz 喺 SPA catch-all 之後 → 404"
+
+    def test_uses_local_db_not_network(self):
+        """
+        ⚠️ 要用本機城市庫（快、唔使網絡）——
+           唔好為咗時區去打 Photon。
+        """
+        s = (ROOT / "server" / "app" / "main.py").read_text(encoding="utf-8")
+        i = s.index("def api_tz(")
+        blk = s[i:i + 1600]
+        assert "localgeo" in blk, "冇用本機城市庫"
+        assert "Photon" not in blk and "nominatim" not in blk.lower()
+
+    def test_returns_iana_name(self):
+        """
+        ⚠️⚠️ 要回 **IANA** 名（`Asia/Tokyo`）而唔係 `Etc/GMT-9`。
+           ⚠️ 我第一版寫錯 `_zh_to_cc()` 用法（佢係函數唔係 dict），
+              搞到成日 fallback 去 `Etc/GMT-9` —— 功能啱但前端
+              顯示唔到「東京」。
+        """
+        s = (ROOT / "server" / "app" / "main.py").read_text(encoding="utf-8")
+        i = s.index("def api_tz(")
+        blk = s[i:i + 1600]
+        # ⚠️ 一定要用中文國名反查 cc（唔係就 fallback）
+        assert '_zh_to_cc(c.get("country")' in blk, \
+            "_zh_to_cc 用法錯（會 fallback 去 Etc/GMT±N）"
+
+    def test_handles_missing_city(self):
+        """⚠️ 搵唔到城市要 404（唔可以回 null 時區）。"""
+        s = (ROOT / "server" / "app" / "main.py").read_text(encoding="utf-8")
+        i = s.index("def api_tz(")
+        blk = s[i:i + 1600]
+        assert "404" in blk, "搵唔到城市冇報錯"
+
+    def test_frontend_api_method(self):
+        s = code(WEB / "lib" / "api.js")
+        assert "tz:" in s, "冇 api.tz"

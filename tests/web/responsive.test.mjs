@@ -167,12 +167,18 @@ console.log('\n▸ 主畫面 app 格')
   check('app 格用百分比 auto-fit（唔寫死欄數）',
     !/gridTemplateColumns:\s*'repeat\(4/.test(home) && home.includes('app-grid'))
   check('主畫面邊距用 clamp', /padding:\s*'0 clamp\(/.test(home))
-  // ⚠️ 時鐘搬咗去 DualClock.jsx（雙時區）——
+  // ⚠️ 時鐘搬咗去 WorldClocks.jsx（手機時間 + 自選城市）——
   //    所以字級檢查要去嗰個檔案搵。
   const clock = fs.readFileSync(
-    new URL('../../web/src/components/DualClock.jsx', import.meta.url), 'utf8')
+    new URL('../../web/src/components/WorldClocks.jsx', import.meta.url), 'utf8')
+  // ⚠️ WorldClocks 冇 `compact` prop（新設計）——
+  //    大鐘（手機時間）係 `fontSize: 46` px 常數。
   check('時鐘字級用 px 常數（唔再係 clamp）',
-    /fontSize:\s*compact\s*\?\s*30\s*:\s*46/.test(clock))
+    /fontSize:\s*46\s*,/.test(clock))
+  // ⚠️ 用戶要求：**手機時間**做大字（唔係目的地）
+  check('手機時間係大字', clock.includes('你嘅時間'))
+  // ⚠️ 第二個鐘要揀得
+  check('第二個鐘可以揀城市', clock.includes('CityPicker'))
 
   // 模擬 320px 最窄機
   const px = (str, vw) => {

@@ -258,10 +258,13 @@ console.log('\n▸ ⚠️ 驗證 JSX 殘留檢查器（餵已知壞 input）')
   }
 }
 
-console.log('\n▸ 雙時鐘 DualClock')
+console.log('\n▸ 世界時鐘 WorldClocks')
 {
+  // ⚠️ 用戶要求改咗設計：
+  //    「第一個最上面嗰個係手機時間，第二個就係有得比你揀」
+  //    → DualClock（目的地做大字）→ WorldClocks（手機做大字 + 自選城市）
   const src = fs.readFileSync(
-    new URL('../../web/src/components/DualClock.jsx', import.meta.url), 'utf8')
+    new URL('../../web/src/components/WorldClocks.jsx', import.meta.url), 'utf8')
   const tzSrc0 = fs.readFileSync(new URL('../../web/src/lib/tz.js', import.meta.url), 'utf8')
   for (const [k, label, where] of [
     ['Intl.DateTimeFormat', '用 Intl（自動處理夏令時間）', tzSrc0],
@@ -285,12 +288,16 @@ console.log('\n▸ 雙時鐘 DualClock')
   console.log(`    ${hasAll ? '✓' : '✗'} tz.js 有五個工具函數`)
   hasAll ? pass++ : fail++
 
-  // HomeScreen 要用 DualClock
+  // ⚠️ HomeScreen 要用 WorldClocks（唔再係 DualClock）
   const home = fs.readFileSync(
     new URL('../../web/src/components/HomeScreen.jsx', import.meta.url), 'utf8')
-  const used = home.includes('<DualClock') && home.includes('timezone')
-  console.log(`    ${used ? '✓' : '✗'} 主畫面用雙時鐘`)
+  const used = home.includes('<WorldClocks') && !home.includes('<DualClock')
+  console.log(`    ${used ? '✓' : '✗'} 主畫面用世界時鐘（唔再係 DualClock）`)
   used ? pass++ : fail++
+  // ⚠️ 第二個鐘一定要**揀得**（CityPicker）
+  const pickable = src.includes('CityPicker') && src.includes('localStorage')
+  console.log(`    ${pickable ? '✓' : '✗'} 第二個鐘可以自己揀城市（+ 記住）`)
+  pickable ? pass++ : fail++
 }
 
 console.log('\n▸ 新手教學 Onboarding')

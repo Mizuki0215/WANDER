@@ -220,6 +220,8 @@ export const api = {
   // ── parse / lookup ──
   parse: (payload) => req('POST', '/api/parse', { body: payload }),
   lookup: (name, hint) => req('GET', '/api/lookup', { params: { name, hint } }),
+  /** ⚠️ 城市 → 時區（世界時鐘用，唔使有旅程） */
+  tz: (city) => req('GET', '/api/tz', { params: { city } }),
 
   // ── items ──
   addItem: (tripId, parsed) => req('POST', '/api/items', { body: parsed, params: { trip_id: tripId } }),
