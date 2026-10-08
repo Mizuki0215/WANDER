@@ -415,7 +415,7 @@ export default function ShoppingList({ trip, members, onRefresh }) {
         <Empty icon="🛒" title="購物清單空嘅" hint="上面入一項，或者貼一整份清單落去" />
       ) : (
         pending.map(it => (
-          <ShopRow key={it.id} item={it} onToggle={() => toggle(it)}
+          <ShopRow key={it.id} item={it} tripCurrency={data?.currency} onToggle={() => toggle(it)}
             onDetail={() => setDetail(it)} onChanged={load} onView={setView} />
         ))
       )}
@@ -435,7 +435,7 @@ export default function ShoppingList({ trip, members, onRefresh }) {
               }}>清走</button>
           </div>
           {showDone && done.map(it => (
-            <ShopRow key={it.id} item={it} onToggle={() => toggle(it)}
+            <ShopRow key={it.id} item={it} tripCurrency={data?.currency} onToggle={() => toggle(it)}
               onDetail={() => setDetail(it)} onChanged={load} onView={setView} />
           ))}
         </>
@@ -456,7 +456,7 @@ export default function ShoppingList({ trip, members, onRefresh }) {
   )
 }
 
-function ShopRow({ item, onToggle, onDetail, onChanged, onView }) {
+function ShopRow({ item, onToggle, onDetail, onChanged, onView, tripCurrency }) {
   return (
     <div className="item" style={{
       alignItems: 'center', cursor: 'default',
@@ -505,8 +505,8 @@ function ShopRow({ item, onToggle, onDetail, onChanged, onView }) {
                  而家顯示**該項自己嘅貨幣**，如果同旅程貨幣唔同
                  就順便顯示換算後嘅數。 */}
           {item.price ? ` · ${SYMBOLS[item.currency] || item.currency || ''}${Number(item.price).toLocaleString()}` : ''}
-          {item.price && item.price_trip != null && item.currency !== data?.currency
-            ? ` (≈ ${SYMBOLS[data?.currency] || data?.currency || ''}${Number(item.price_trip).toLocaleString()})`
+          {item.price && item.price_trip != null && item.currency !== tripCurrency
+            ? ` (≈ ${SYMBOLS[tripCurrency] || tripCurrency || ''}${Number(item.price_trip).toLocaleString()})`
             : ''}
           {item.note ? ` · ${item.note}` : ''}
         </p>

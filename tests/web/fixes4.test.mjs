@@ -47,8 +47,18 @@ console.log('\n▸ ① 旅程選擇要記住')
   check('exitTrip 先至清空', /const exitTrip[\s\S]{0,400}setTripId\(null\)/.test(app))
 
   // ⚠️ 只有一個旅程就自動揀
-  check('refreshTrips 會還原／自動揀',
-    /setTripId\(prev =>/.test(app) && /list\.length === 1/.test(app))
+  //
+  // ⚠️⚠️ 2026-10-08 改：呢段邏輯由 `refreshTrips()` **抽出**
+  //    做 `pickTrip()` —— 因為用戶報「shopping list 入唔到去睇」，
+  //    根因係**開機從來冇 call refreshTrips()** → 永遠「未揀旅程」。
+  //    ✅ 而家 `pickTrip()` 喺**開機**同 `refreshTrips()` 都叫。
+  check('有 pickTrip() 還原／自動揀',
+    /const pickTrip = useCallback/.test(app) && /arr\.length === 1/.test(app))
+  // ⚠️ 定義那行係 `const pickTrip = useCallback(` —— 中間有 `= useCallback`，
+  //    所以 `pickTrip\(` 只 match **呼叫**（line 286 開機、line 317 refresh）。
+  const calls = (app.match(/pickTrip\(/g) || []).length
+  check('pickTrip 由 refreshTrips 同開機都叫',
+    calls >= 2, `⚠️ 只叫 ${calls} 次 —— 開機會漏`)
 
   // 清單要標示「當前」
   const trips = code(read('components/Trips.jsx'))

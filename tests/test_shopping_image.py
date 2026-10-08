@@ -565,3 +565,189 @@ class TestDestinationFieldRemoved:
         """⚠️ 要解釋為咩刪（唔可以靜靜咁刪）。"""
         s = (WEB / "components" / "Trips.jsx").read_text(encoding="utf-8")
         assert "「目的地」欄已經" in s, "冇解釋為咩刪"
+
+
+# ══════════════════════════════════════════════════════════════
+# ⚠️⚠️ ShopRow scope bug（用戶報「shopping list 入唔到去睇」）
+# ══════════════════════════════════════════════════════════════
+
+class TestShopRowScope:
+    """
+    🚨🚨 用戶報（報咗兩次）：「shopping list 入唔到去睇」
+
+    ⚠️ 根因：`ShopRow` 入面寫咗 `data?.currency` ——
+       但 `data` **唔喺 ShopRow 嘅 scope 入面**！
+
+    ⚠️⚠️ `data?.currency` 只擋 `data` 係 null／undefined，
+       **擋唔到 `data` 完全未宣告** ——
+       undeclared 變數一定拋 `ReferenceError`，
+       optional chaining 都救唔到。
+
+    → **有 item 就爆**（0 個 item 唔會行到嗰行）。
+
+    ⚠️ 為咩之前啲測試捉唔到：
+       所有 fixture 都用 `{ items: [] }` —— **永遠行唔到 ShopRow**！
+       ✅ 所以呢個 class 一定要用**有 item** 嘅情況檢查。
+    """
+
+    @pytest.fixture(scope="class")
+    def jsx(self):
+        return (WEB / "components" / "ShoppingList.jsx").read_text(encoding="utf-8")
+
+    def test_shoprow_has_no_data_reference(self, jsx):
+        """
+        ⚠️⚠️ 核心：`ShopRow` 入面**唔可以**出現 `data` ——
+           佢冇喺 scope 入面，一定會 ReferenceError。
+        """
+        import re
+        i = jsx.index("function ShopRow(")
+        # ⚠️ 搵函數結尾（下一個 module-level function）
+        j = jsx.index("\nfunction ", i + 20)
+        body = jsx[i:j]
+        # ⚠️ 去註解先檢查（我嘅解釋註解有 `data`）
+        body = re.sub(r"/\*[\s\S]*?\*/", "", body)
+        body = "\n".join(l.split("//")[0] for l in body.split("\n"))
+        hits = [m.start() for m in re.finditer(r"(?<![.\w])data\b", body)]
+        assert not hits, (
+            f"⚠️⚠️ ShopRow 用咗未宣告嘅 `data`（{len(hits)} 處）—— "
+            f"有 item 就會 ReferenceError，整個購物清單白畫面。"
+            f"要由 parent 傳 prop 入去。")
+
+    def test_trip_currency_is_a_prop(self, jsx):
+        """⚠️ 修法：`tripCurrency` 由 parent 傳入。"""
+        assert "tripCurrency" in jsx, "冇 tripCurrency prop"
+        i = jsx.index("function ShopRow(")
+        sig = jsx[i:jsx.index(")", i)]
+        assert "tripCurrency" in sig, "tripCurrency 唔係 ShopRow 嘅參數"
+
+    def test_all_shoprow_usages_pass_currency(self, jsx):
+        """
+        ⚠️ 每個 `<ShopRow>` 都要傳 `tripCurrency` ——
+           漏一個嗰個位就會 `undefined`（雖然唔會爆，但換算顯示唔到）。
+        """
+        import re
+        usages = re.findall(r"<ShopRow\b[^>]*>", jsx)
+        assert usages, "搵唔到 <ShopRow> 用法"
+        for u in usages:
+            assert "tripCurrency=" in u, f"呢個 <ShopRow> 冇傳 tripCurrency:\n{u[:120]}"
+
+    def test_optional_chaining_does_not_guard_undeclared(self):
+        """
+        ⚠️⚠️ 用真 JS 證明呢個陷阱（唔係靠記憶）。
+
+           `x?.y` 喺 `x` **未宣告** 嗰陣一樣拋 ReferenceError。
+        """
+        import subprocess
+        js = """
+        try { const r = undeclaredVar?.foo; console.log('NO THROW') }
+        catch (e) { console.log('THREW:' + e.constructor.name) }
+        """
+        r = subprocess.run(["node", "-e", js], capture_output=True, text=True,
+                           timeout=30)
+        out = (r.stdout + r.stderr).strip()
+        assert "THREW:ReferenceError" in out, (
+            f"⚠️ 預期 ReferenceError，但得到: {out!r}")
+
+    def test_real_data_test_exists(self):
+        """
+        ⚠️⚠️ 一定要有「用真數據 + 真 server」嘅測試 ——
+           純 SSR + 空 fixture 捉唔到呢類 bug。
+        """
+        p = ROOT / "tests" / "web" / "shopping_real.test.mjs"
+        assert p.exists(), "冇 shopping_real.test.mjs（真數據測試）"
+        s = p.read_text(encoding="utf-8")
+        assert "127.0.0.1:8787" in s, "唔係打真 server"
+        assert "NODE_FETCH" in s, "冇用真 fetch"
+
+
+class TestTripAutoSelection:
+    """
+    🚨🚨 同一個 bug 報告嘅**另一個**根因。
+
+    ⚠️ 用戶明明有旅程「Fukuoka」，但主畫面顯示「✈️ 未揀旅程」
+       → 撳 Shopping → 彈「先揀一個旅程」+ 旅程選擇器
+       → 用戶以為「入唔到去睇」。
+
+    ⚠️ 兩個疊埋嘅 bug：
+       ① 開機從來冇「揀旅程」→ `tripId` 永遠 null
+       ② 就算 `tripId` 有值，都**冇 effect 去 load 旅程** ——
+          `refreshTrip()` 只喺用戶撳 refresh 嗰陣叫
+          → header 顯示「0 日 · 👥 0」、清單永遠空
+    """
+
+    @pytest.fixture(scope="class")
+    def app(self):
+        return (ROOT / "web" / "src" / "App.jsx").read_text(encoding="utf-8")
+
+    def test_pick_trip_extracted(self, app):
+        """⚠️ 要抽做 `pickTrip()` 先可以喺開機都叫。"""
+        assert "const pickTrip = useCallback(" in app, "冇抽 pickTrip"
+
+    def test_pick_trip_called_on_boot(self, app):
+        """
+        ⚠️⚠️ 核心 —— **開機**一定要揀旅程。
+           之前只有 `refreshTrips()` 有呢個邏輯，
+           但開機行另一條路（直接 `api.me()`），從來冇叫。
+        """
+        i = app.index("  // 啟動\n  useEffect(() => {")
+        j = app.index("}, [setTheme", i)
+        blk = app[i:j]
+        assert "pickTrip(r.trips)" in blk, (
+            "⚠️⚠️ 開機冇 pickTrip —— 只有一個旅程嘅用戶會見到「未揀旅程」")
+
+    def test_pick_trip_defined_before_use(self, app):
+        """
+        ⚠️⚠️ `useCallback` 用 `const` —— 喺 dep array 用之前一定要定義。
+           （dep array 喺 **render 期間**評估，唔係 effect 執行時。）
+        """
+        i_def = app.index("const pickTrip = useCallback(")
+        i_dep = app.index("[setTheme, pickTrip]")
+        assert i_def < i_dep, "pickTrip 定義喺 dep array 之後 → TDZ 會爆"
+
+    def test_auto_selects_single_trip(self, app):
+        """⚠️ 只有一個旅程 → 自動揀（用戶最常撞到嘅情況）。"""
+        i = app.index("const pickTrip = useCallback(")
+        blk = app[i:i + 900]
+        assert "arr.length === 1" in blk, "冇自動揀單一旅程"
+        assert "return arr[0].id" in blk
+
+    def test_restores_saved_trip(self, app):
+        """⚠️ 記住上次揀嘅（localStorage）。"""
+        i = app.index("const pickTrip = useCallback(")
+        blk = app[i:i + 900]
+        assert "readSavedTrip()" in blk, "冇還原上次揀嘅旅程"
+
+    def test_effect_loads_trip_on_tripid_change(self, app):
+        """
+        ⚠️⚠️ `tripId` 一變就要 load 旅程資料 ——
+           唔係嘅話 header 顯示「0 日 · 👥 0」、清單永遠空。
+        """
+        assert "refreshTrip(tripId)" in app, "冇 effect load 旅程"
+
+    def test_refresh_trip_deps_exclude_tripid(self, app):
+        """
+        ⚠️⚠️ `refreshTrip` 嘅 deps **唔可以**有 `tripId` ——
+           上面嘅 effect 依賴 `refreshTrip`，如果佢每次 `tripId`
+           變都重新 create，effect 就會**無限 loop**。
+        """
+        i = app.index("const refreshTrip = useCallback(")
+        j = app.index("  }, [", i)
+        deps = app[j:app.index(")", j)]
+        assert "tripId" not in deps, f"refreshTrip deps 有 tripId → 無限 loop: {deps}"
+
+    def test_no_tdz_for_callbacks(self, app):
+        """
+        ⚠️⚠️ 所有 `useCallback` 嘅 dep array 唔可以引用未定義嘅 const。
+           （呢個 bug 中過：`refreshBadges` 定義喺 `refreshTrip` 之後。）
+        """
+        import re
+        names = [m.group(1) for m in
+                 re.finditer(r"^  const (\w+) = useCallback\(", app, re.M)]
+        first_def = {}
+        for n in names:
+            first_def.setdefault(n, app.index(f"const {n} = useCallback("))
+        for m in re.finditer(r"^  \}, \[([^\]]*)\]\)", app, re.M):
+            for dep in [d.strip() for d in m.group(1).split(",") if d.strip()]:
+                if dep in first_def:
+                    assert first_def[dep] < m.start(), (
+                        f"⚠️ dep `{dep}` 喺用到之後才定義 → TDZ ReferenceError")

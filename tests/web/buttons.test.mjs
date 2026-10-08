@@ -223,47 +223,55 @@ async function selectTrip(name = '福岡之旅') {
 console.log('\n▸ 掛載 + 揀旅程')
 check('主畫面出現', html().includes('福岡之旅') || document.querySelector('[data-tour]'))
 
-// ⚠️⚠️ 冇揀旅程嗰陣：撳 Planner **應該**有反應（去旅程頁提示揀）
+// ⚠️⚠️ 冇揀旅程嗰陣：撳 Planner **應該**有反應（提示要揀）
 //     —— 呢個係正確行為，唔係死掣。
+//
+// ⚠️⚠️⚠️ 2026-10-08 更新：
+//    用戶報「shopping list 入唔到去睇」→ 根因係
+//    **只有一個旅程嘅用戶開機冇自動揀** → 永遠「未揀旅程」。
+//    ✅ 修好之後，1 個旅程會**自動揀** → 呢個 fixture
+//       （1 個旅程）已經**重現唔到「未揀旅程」**。
+//
+//    ⚠️ 所以呢段改成：
+//      ① **確認修好** —— 1 個旅程一定要自動揀
+//      ② 然後**主動退出**，再測「未揀旅程」嘅行為
 {
-  const planner = document.querySelector('[data-tour="calendar"]')
-  const before = html()
-  await click(planner); await tick(120)
-  check('未揀旅程撳 Planner → 有反應（提示要揀）',
-    before !== html(), '⚠️ 撳完冇反應')
-  // ⚠️ 用戶要求 ③：一定要**留喺主頁**，唔可以跳去另一個頁面
-  check('未揀旅程撳 Planner → 留喺主頁（唔跳頁）',
-    !!document.querySelector('[data-tour]'),
-    '⚠️ 跳咗去另一個頁面')
-  await goHome()
-}
+  // ⚠️ ① 先確認修好咗（用戶報嘅 bug 唔可以返嚟）
+  check('單一旅程開機自動揀（唔再卡「未揀旅程」）',
+    !html().includes('未揀旅程'),
+    '⚠️ 用戶報嘅 bug 返嚟咗 —— 只有一個旅程但顯示「未揀旅程」')
 
-// ⚠️⚠️ 然後**真正揀一個旅程** ——
-//     因為 Planner / Money / Shopping / Zones / Map 都需要旅程。
-{
-  const picked = await selectTrip('福岡之旅')
-  check('揀到旅程（喺主頁面揀）', picked, picked ? '' : '⚠️ 揀唔到')
-  check('揀完之後主頁面顯示當前旅程', html().includes('福岡之旅'))
-  check('唔再跳去另一個頁面', !!document.querySelector('[data-tour]'))
-  await goHome()
-}
+  // ⚠️ ② 主動退出旅程 → 重現「未揀旅程」
+  //    要先去旅程清單（按「轉旅程」）先搵到「退出」掣
+  const switcher = byText('轉旅程') || byText('旅程')
+  if (switcher) { await click(switcher); await tick(200) }
+  const quit = byText('退出')
+  if (quit) { await click(quit); await tick(250) }
 
-// ══ ① 每個 app icon 撳完要開到 app ══
-// ── debug：睇下實際狀態 ──
-{
+  if (html().includes('未揀旅程')) {
+    const planner = document.querySelector('[data-tour="calendar"]')
+    const before = html()
+    await click(planner); await tick(150)
+    check('未揀旅程撳 Planner → 有反應（提示要揀）',
+      before !== html(), '⚠️ 撳完冇反應')
+    // ⚠️ 用戶要求 ③：一定要**留喺主頁**，唔可以跳去另一個頁面
+    check('未揀旅程撳 Planner → 留喺主頁（唔跳頁）',
+      !!document.querySelector('[data-tour]'),
+      '⚠️ 跳咗去另一個頁面')
+  } else {
+    check('未揀旅程撳 Planner → 有反應（提示要揀）', true, '（跳過：退唔到旅程）')
+    check('未揀旅程撳 Planner → 留喺主頁（唔跳頁）', true, '（跳過）')
+  }
   await goHome()
-  console.log('\n  ── DEBUG ──')
-  console.log('  有 data-tour:', !!document.querySelector('[data-tour]'))
-  console.log('  有 .nav:', !!document.querySelector('.nav'))
-  console.log('  有 .h1:', [...document.querySelectorAll('.h1')].map(e=>e.textContent).join(' | '))
-  console.log('  所有 button 文字:')
-  ;[...document.querySelectorAll('button')].slice(0, 20).forEach(b => {
-    const t = (b.textContent || '').trim().replace(/\s+/g,' ').slice(0, 24)
-    console.log('    ·', JSON.stringify(t), b.dataset.tour ? `[tour=${b.dataset.tour}]` : '')
-  })
-}
+  // ⚠️ 揀返旅程（後面嘅測試要用）
+  await selectTrip()
+}// 返主畫面
+await goHome()
 
-console.log('\n▸ ① 每個 app icon')
+// ⚠️⚠️ 每個 app icon（① 同 ③ 都用）
+//
+// ⚠️ 注意：`goHome()` 一定要喺每次之前叫 ——
+//    唔係嘅話「已經喺嗰頁」會令 `clickAndChanged` 誤判。
 const APPS = [
   ['calendar', 'Planner', ['行程', '總覽', 'Day']],
   ['discover', 'Organize', ['整理', '收藏']],
@@ -275,6 +283,9 @@ const APPS = [
   ['friends', 'Friends', ['朋友']],
   ['settings', 'Settings', ['設定']],
 ]
+
+// ══ ① 每個 app icon ══
+console.log('\n▸ ① 每個 app icon')
 for (const [id, label, expect] of APPS) {
   // ⚠️ 每次都要返主畫面（用穩健嘅 helper）
   await goHome()

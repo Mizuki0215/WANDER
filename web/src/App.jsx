@@ -238,6 +238,39 @@ export default function App() {
     }
   }, [])
 
+  /**
+   * ⚠️⚠️ 揀「而家嘅旅程」—— 開機同 refresh 都要行。
+   *
+   *   🚨 用戶報（報咗兩次）：「shopping list 入唔到去睇」
+   *
+   *   ⚠️ 根因：呢段邏輯原本**只喺 `refreshTrips()` 入面**，
+   *      但**開機嗰陣從來冇 call `refreshTrips()`** ——
+   *      開機係行另一條路（直接 `api.me()` + `setTrips()`）。
+   *
+   *      → 用戶明明有旅程「Fukuoka」，但 `tripId` 永遠 `null`
+   *      → 主畫面顯示「✈️ 未揀旅程」
+   *      → 撳 Shopping → 彈「先揀一個旅程」+ 旅程選擇器
+   *      → 用戶以為「入唔到去睇」
+   *
+   *   ⚠️ 而且**只有一個旅程**嘅用戶最容易被咬 ——
+   *      因為佢哋預期「得一個就梗係自動入去」。
+   *
+   *   ✅ 修法：抽做一個 `pickTrip()`，開機**同** refresh 都叫。
+   */
+  const pickTrip = useCallback((list) => {
+    setTripId(prev => {
+      const arr = list || []
+      // ① 而家揀嘅仲喺度 → 保留
+      if (prev && arr.some(t => t.id === prev)) return prev
+      // ② 還原上次揀嘅（localStorage）
+      const saved = readSavedTrip()
+      if (saved && arr.some(t => t.id === saved)) return saved
+      // ③ ⚠️ 只有一個旅程 → **自動揀**（用戶最常撞到嘅情況）
+      if (arr.length === 1) return arr[0].id
+      return prev
+    })
+  }, [])
+
   // 啟動
   useEffect(() => {
     if (bootRef.current) return
@@ -247,13 +280,17 @@ export default function App() {
       try {
         const r = await api.me()
         setUser(r.user); setTrips(r.trips)
+        // ⚠️⚠️ 開機一定要揀旅程 —— 唔係嘅話「只有一個旅程」嘅
+        //    用戶會見到「未揀旅程」→ 撳任何 app 都話「先揀一個旅程」
+        //    （用戶報「shopping list 入唔到去睇」嘅真正原因）
+        pickTrip(r.trips)
         if (r.user.theme) setTheme(r.user.theme)
         checkAdmin()
         // ⚠️ 記一個事件（後台數據來源）。失敗唔緊要。
         api.track('login')
       } catch { auth.clear() } finally { setBooting(false) }
     })()
-  }, [setTheme])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [setTheme, pickTrip])   // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * ⚠️⚠️ 重新攞自己嘅 user（`/api/me`）。
@@ -277,24 +314,20 @@ export default function App() {
   const refreshTrips = useCallback(async () => {
     const r = await api.me()
     setTrips(r.trips)
-    // ⚠️⚠️ 順便還原「上次揀嘅旅程」。
-    //    用戶報嘅 bug：「揀咗旅程之後…再出返去…佢就同我講未揀旅程」。
-    //    原因有兩個：① `‹ 旅程` 個掣會清空 tripId
-    //                ② tripId 從來冇存過，一 refresh 就冇
-    //    呢度處理 ②。
-    setTripId(prev => {
-      const list = r.trips || []
-      if (prev && list.some(t => t.id === prev)) return prev   // 仲喺度，保留
-      const saved = readSavedTrip()
-      if (saved && list.some(t => t.id === saved)) return saved // 還原上次
-      if (list.length === 1) return list[0].id                  // 只有一個就自動揀
-      return prev
-    })
+    pickTrip(r.trips)
     return r.trips
+  }, [pickTrip])
+
+  const refreshBadges = useCallback(async () => {
+    try {
+      const f = await api.friends()
+      const n = (f.incoming || []).length
+      setFriendBadge(n)
+    } catch {}
   }, [])
 
   const refreshTrip = useCallback(async (id) => {
-    const tid = id || tripId
+    const tid = id
     if (!tid) return
     try {
       const [t, it, st] = await Promise.all([
@@ -307,7 +340,11 @@ export default function App() {
         .catch(() => {})
       refreshBadges()
     } catch (e) { toast(e.message) }
-  }, [tripId])
+    // ⚠️⚠️ deps **一定唔可以**有 `tripId` ——
+    //    上面嘅 effect 依賴 `refreshTrip`，如果 `refreshTrip`
+    //    每次 `tripId` 變都重新 create，effect 就會無限 loop。
+    //    ✅ `tripId` 由 caller 傳入（`refreshTrip(tripId)`）。
+  }, [refreshBadges])
 
   const openTrip = useCallback(async (id) => {
     setTripId(id); setTab('home')
@@ -340,6 +377,30 @@ export default function App() {
     setTab('trips')
     refreshTrips()
   }, [refreshTrips])
+
+  /**
+   * ⚠️⚠️ `tripId` 一變就 load 該旅程嘅資料。
+   *
+   *   🚨 用戶報（報咗兩次）：「shopping list 入唔到去睇」
+   *
+   *   ⚠️ 根因（**兩個疊埋**）：
+   *     ① 開機從來冇「揀旅程」→ `tripId` 永遠 null
+   *        （已修：抽 `pickTrip()`，開機都叫）
+   *     ② ⚠️ 就算 `tripId` 有值，**都冇 effect 去 load 旅程**——
+   *        `refreshTrip()` 只喺用戶撳「refresh」或者 `openTrip()` 嗰陣叫。
+   *
+   *        → 結果：旅程 header 顯示「0 日 · 👥 0 · ✦ 0」，
+   *          購物清單永遠「空嘅」、行程永遠空白。
+   *
+   *   ✅ 修法：加呢個 effect —— `tripId` 一變就 `refreshTrip(tripId)`。
+   *
+   *   ⚠️ 一定要傳 `tripId` 入去（唔係靠 closure 嘅 `tripId`）——
+   *      因為 `refreshTrip` 嘅 closure 可能係舊嗰個。
+   */
+  useEffect(() => {
+    if (!tripId) { setTrip(null); setItems([]); setStops([]); return }
+    refreshTrip(tripId)
+  }, [tripId, refreshTrip])
 
   /** 真正退出旅程（清空揀選）。 */
   const exitTrip = useCallback(() => {
@@ -377,13 +438,6 @@ export default function App() {
   }, [user])   // eslint-disable-line
 
   /** 好友請求 + 購物 badge（主畫面顯示）。 */
-  const refreshBadges = useCallback(async () => {
-    try {
-      const f = await api.friends()
-      const n = (f.incoming || []).length
-      setFriendBadge(n)
-    } catch {}
-  }, [])
 
   // ⚠️ 個人 QR 連結：/?add=<username>
   //    對方用手機原生相機掃我嘅 QR → 開到 app 並帶住 ?add=alice
