@@ -49,3 +49,8 @@ engine/wander/data/*.tmp
 .chrome-data/
 .cd2/
 docs/shots/*.html
+
+# flyctl 嘅 config / token / 下載嘅 binary
+.fly/
+.home/
+.tools/

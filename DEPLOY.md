@@ -54,6 +54,30 @@ GitHub Codespaces 係一部**真嘅 Linux VM**（唔止靜態檔案），
 
 ---
 
+## 🚀 永久 link：Fly.io（一鍵 script）
+
+⚠️ `brew install flyctl` 喺呢部機**失敗**（`/opt/homebrew/Cellar` 唔可以寫）
+   → 我直接下載 binary 落 `.tools/bin/flyctl`，同埋寫咗 `./deploy.sh`。
+
+```bash
+./deploy.sh
+```
+
+⚠️ 個 script 會做：
+- 問你 app 名（要全球唯一）→ 寫入 `fly.toml`
+- `fly auth login`（開瀏覽器）
+- **建立 volume**（⚠️⚠️ 唔做嘅話每次 deploy 清空所有資料）
+- 設 secrets（`WANDER_SIGNUP_MODE` / `WANDER_ADMIN_EMAILS`）
+- `fly deploy`
+
+→ **`https://你個app名.fly.dev`** ← 永久、24/7、HTTPS
+
+⚠️ 之後更新：改完 code 再跑 `./deploy.sh`
+
+⚠️ 注意：Fly.io 而家要綁信用卡（免費額度內唔收錢）。
+
+---
+
 ## 🚀 真正 host 嘅建議：Fly.io（免費層）
 
 | | Codespaces | **Fly.io** | Render |
