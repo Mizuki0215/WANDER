@@ -36,6 +36,8 @@ COPY run.sh /app/
 # ⚠️⚠️ 資料庫要放喺**可以寫**嘅地方，而且**唔可以**包入 image。
 #    用 volume mount（見 fly.toml / render.yaml）。
 ENV WANDER_DB=/data/wander.db
+# ⚠️⚠️ 上傳相片都要喺 volume —— 唔係嘅話每次 deploy 清空
+ENV WANDER_UPLOAD_DIR=/data/uploads
 RUN mkdir -p /data
 
 # ⚠️ 大部分 host 用 $PORT

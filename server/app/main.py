@@ -490,7 +490,17 @@ def delete_expense(expense_id: str, user: dict = Depends(current_user)) -> dict:
 # 圖片上傳（購物清單用）
 # ══════════════════════════════════════════════════════════════
 
-UPLOAD_DIR = ROOT / "server" / "uploads"
+# ⚠️⚠️ 上傳目錄 —— 一定要可以用 env 蓋過。
+#
+#   為咩：Docker / Fly.io 入面 `ROOT = /app` →
+#   `UPLOAD_DIR = /app/server/uploads` ——
+#   ⚠️ 但 volume 掛喺 `/data` → **唔喺 volume 入面** →
+#   **每次 deploy 都會清空所有用戶上傳嘅相片**！
+#
+#   ✅ 預設行為唔變（本機跑照樣 `server/uploads`），
+#      但 Dockerfile / fly.toml 會設 `WANDER_UPLOAD_DIR=/data/uploads`。
+import os as _os
+UPLOAD_DIR = Path(_os.environ.get("WANDER_UPLOAD_DIR") or (ROOT / "server" / "uploads"))
 MAX_UPLOAD = 6 * 1024 * 1024          # 6 MB（base64 後）
 
 

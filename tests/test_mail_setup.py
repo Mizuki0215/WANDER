@@ -702,3 +702,55 @@ class TestServeo:
         s = (ROOT / "HOSTING.md").read_text(encoding="utf-8")
         assert "只有兩條路" not in s, "仲寫住「只有兩條路」（實測錯）"
         assert "免費都有 3 條路" in s, "冇更正做 3 條路"
+
+
+class TestUploadsNotInGit:
+    """
+    🚨🚨 實測捉到嘅**嚴重**問題：
+
+       用戶上傳嘅相片（購物清單）**13 張、2.3MB**
+       已經 commit 咗上 git！
+
+       ⚠️ 如果 repo 變 **public** → 用戶私人相片公開。
+       ⚠️ 而且 git 歷史**永久保留** —— 刪 commit 都冇用。
+
+       ✅ 修：`git rm --cached` + `.gitignore`。
+    """
+
+    def test_gitignore_blocks_uploads(self):
+        s = (ROOT / ".gitignore").read_text(encoding="utf-8")
+        assert "server/uploads/" in s, "⚠️⚠️ .gitignore 冇擋 server/uploads/"
+
+    def test_no_uploads_tracked(self):
+        """⚠️⚠️ git 唔應該追蹤任何 uploads 檔案。"""
+        import subprocess
+        out = subprocess.run(
+            ["git", "ls-files", "server/uploads"],
+            cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        assert not out, f"⚠️⚠️ 仲有 uploads 檔案喺 git：\n{out[:300]}"
+
+    def test_uploads_dir_still_local(self):
+        """⚠️ 由 git 移除**唔應該**刪本機檔案。"""
+        d = ROOT / "server" / "uploads"
+        if not d.exists():
+            pytest.skip("本機冇 uploads")
+        # ⚠️ 呢個測試只係提醒 —— 唔好 assert 數量（用戶可能刪咗）
+
+    def test_uploads_uses_env_override(self):
+        """
+        ⚠️⚠️ 第二個問題：Docker 入面 `UPLOAD_DIR = /app/server/uploads`
+           但 volume 掛喺 `/data` → **每次 deploy 清空所有相片**。
+           ✅ 修法：支援 `WANDER_UPLOAD_DIR`。
+        """
+        s = (ROOT / "server" / "app" / "main.py").read_text(encoding="utf-8")
+        assert "WANDER_UPLOAD_DIR" in s, "UPLOAD_DIR 唔支援 env override"
+
+    def test_dockerfile_sets_upload_dir(self):
+        """⚠️ Dockerfile 一定要設 `/data/uploads`（volume 入面）。"""
+        s = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        assert "WANDER_UPLOAD_DIR=/data/uploads" in s, \
+            "Dockerfile 冇設 WANDER_UPLOAD_DIR → deploy 會清空相片"
+
+    def test_fly_sets_upload_dir(self):
+        s = (ROOT / "fly.toml").read_text(encoding="utf-8")
+        assert "WANDER_UPLOAD_DIR" in s, "fly.toml 冇設 WANDER_UPLOAD_DIR"

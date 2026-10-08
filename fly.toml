@@ -17,6 +17,8 @@ primary_region = "hkg"          # ⚠️ 香港最近
 [env]
   WANDER_PORT = "8787"
   WANDER_DB = "/data/wander.db"
+  # ⚠️⚠️ 上傳相片都要喺 volume
+  WANDER_UPLOAD_DIR = "/data/uploads"
 
 # ⚠️⚠️ 資料庫一定要掛 volume ——
 #    唔掛嘅話每次 deploy 都會**清空所有用戶資料**。
