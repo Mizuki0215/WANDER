@@ -74,6 +74,61 @@ def is_short_link(url: str) -> bool:
 # Google Maps 結構解析
 # ══════════════════════════════════════════════════════════════
 
+# ⚠️⚠️ 用戶報：「貼 Google Maps link 之後，解析得唔夠準」
+#
+#    實測捉到 5 個問題：
+#      ① 店名連埋地址一齊（`一蘭拉麵 本店, 1 Chome-1-1 ...`）
+#      ② 純座標當咗做店名（`35.6586,139.7454`）
+#      ③ `place_id:ChIJ...` 當咗做店名（係 Google 內部 ID）
+#      ④ `dir?destination=` 完全冇解析
+#      ⑤ 有座標但 country/city 都係 None
+_COORD_RE = re.compile(r"^-?\d{1,3}\.\d+\s*,\s*-?\d{1,3}\.\d+$")
+
+
+def _is_coord(s: str) -> bool:
+    """⚠️ 呢個字串係唔係「緯度,經度」（唔係店名）？"""
+    return bool(_COORD_RE.match((s or "").strip()))
+
+
+def _is_place_id(s: str) -> bool:
+    """⚠️ Google 內部 ID（`place_id:ChIJ...`、`ChIJ...`）—— 唔係店名。"""
+    t = (s or "").strip()
+    return t.lower().startswith("place_id:") or bool(re.match(r"^ChIJ[A-Za-z0-9_-]{10,}$", t))
+
+
+def _split_name_addr(seg: str) -> tuple[str, str]:
+    """
+    拆開 Google 嘅 `店名, 地址`。
+
+    ⚠️⚠️ Google 嘅 `/place/` 段落成日係 `名稱, 完整地址` ——
+       我哋之前將成串當做**店名**（實測：
+       `'一蘭拉麵 本店, 1 Chome-1-1 Hakataekichuogai, Hakata Ward'`）。
+
+    ✅ 策略：由**第一個**逗號切開，但只喺第二段**似地址**嗰陣先切：
+       · 開頭係數字（`1 Chome-1-1`、`4-16-2`）
+       · 或者有地址關鍵字（都／道／府／県／縣／市／区／區／町／村）
+       · 或者好長（> 12 字）—— 店名通常短
+
+    ⚠️ 唔可以見逗號就切 —— 有啲店名本身有逗號。
+    """
+    t = (seg or "").strip()
+    if "," not in t:
+        return t, ""
+    head, _, tail = t.partition(",")
+    head, tail = head.strip(), tail.strip()
+    if not head or not tail:
+        return t, ""
+    looks_addr = (
+        tail[:1].isdigit()
+        or any(k in tail for k in ("都", "道", "府", "県", "縣", "市", "区", "區", "町", "村"))
+        or len(tail) > 12
+    )
+    # ⚠️ head 一定要有嘢（唔可以係空）
+    if looks_addr and len(head) >= 2:
+        return head, tail
+    return t, ""
+
+
 def parse_gmaps(url: str) -> tuple[Item, list[dict[str, str]]]:
     """
     解析 Google Maps link → Item。
@@ -96,12 +151,39 @@ def parse_gmaps(url: str) -> tuple[Item, list[dict[str, str]]]:
         item.lat, item.lng = float(m34.group(1)), float(m34.group(2))
         step("GMAPS_COORD_EXACT", f"{item.lat}, {item.lng}", "精確座標 !3d!4d（店舖本身）")
 
-    # ② /place/店名/
+    # ② /place/店名（可能連地址）
     m_place = re.search(r"/place/([^/@?]+)", decoded)
     if m_place:
-        item.name = m_place.group(1).replace("+", " ").strip()
-        item.name_method = "Google Maps /place/ 路徑"
-        step("GMAPS_PLACE", item.name, "由 /place/ 路徑抽店名")
+        seg = unquote(m_place.group(1)).replace("+", " ").strip()
+
+        # ⚠️⚠️ **先**檢查成段係唔係座標 —— 一定要喺 `_split_name_addr` **之前**！
+        #    唔係嘅話 `/place/35.6586,139.7454` 會被逗號拆開 →
+        #    name='35.6586'、address='139.7454'（因為 '139...' 開頭係數字
+        #    就當佢係地址）。實測捉到呢個 bug。
+        if _is_coord(seg):
+            step("GMAPS_PLACE", seg, "⚠️ /place/ 係座標（唔係店名）→ 存入座標")
+            try:
+                la, ln = [x.strip() for x in seg.split(",")]
+                item.lat, item.lng = float(la), float(ln)
+            except (ValueError, IndexError):
+                pass
+            name, addr = "", ""
+        elif _is_place_id(seg):
+            step("GMAPS_PLACE", seg, "⚠️ /place/ 係 Google 內部 ID（唔係名）→ 丟棄")
+            name, addr = "", ""
+        else:
+            name, addr = _split_name_addr(seg)
+            if _is_coord(name):
+                step("GMAPS_PLACE", name, "⚠️ /place/ 係座標 → 唔當名")
+                name = ""
+        if name:
+            item.name = name
+            item.name_method = "Google Maps /place/ 路徑"
+            step("GMAPS_PLACE", name, "由 /place/ 路徑抽店名")
+        # ⚠️ 地址一定要留住（用戶要求「show 嘅係多嘅地址呢？」）
+        if addr:
+            item.address = item.address or addr
+            step("GMAPS_PLACE_ADDR", addr, "由 /place/ 逗號後抽地址")
     else:
         step("GMAPS_PLACE", "(無)", "呢條 link 冇 /place/ 路徑")
 
@@ -115,22 +197,36 @@ def parse_gmaps(url: str) -> tuple[Item, list[dict[str, str]]]:
 
     # ④ ?q= / query=
     qs = parse_qs(urlparse(url).query)
-    for key in ("q", "query"):
-        if key in qs and qs[key]:
-            q = qs[key][0].replace("+", " ").strip()
-            if q and not q[0].isdigit():
-                if not item.name:
-                    item.name = q
-                    item.name_method = f"Google Maps ?{key}= 參數"
-                step(f"GMAPS_QUERY_{key.upper()}", q, "由查詢參數抽店名")
-            elif q:
-                parts = q.split(",")
-                if len(parts) == 2:
-                    try:
-                        item.lat, item.lng = float(parts[0]), float(parts[1])
-                        step("GMAPS_QUERY_COORD", q, "由 query 參數抽座標")
-                    except ValueError:
-                        pass
+    # ⚠️ `destination=` / `origin=` 都要（`/maps/dir/?api=1&destination=成田機場`）——
+    #    之前完全冇解析（實測 name=None）。
+    for key in ("q", "query", "destination", "origin"):
+        if key not in qs or not qs[key]:
+            continue
+        q = unquote(qs[key][0]).replace("+", " ").strip()
+        if not q:
+            continue
+        if _is_place_id(q):
+            step(f"GMAPS_QUERY_{key.upper()}", q, "⚠️ Google 內部 ID → 丟棄")
+            continue
+        if _is_coord(q):
+            # ⚠️ `?q=35.6586,139.7454` —— 係座標唔係店名
+            parts = [x.strip() for x in q.split(",")]
+            try:
+                if not item.lat:
+                    item.lat, item.lng = float(parts[0]), float(parts[1])
+                step("GMAPS_QUERY_COORD", q, "由 query 參數抽座標（唔係店名）")
+            except (ValueError, IndexError):
+                pass
+            continue
+        # ⚠️ 地名（可能連地址）
+        nm, ad = _split_name_addr(q)
+        if not item.name and nm:
+            item.name = nm
+            item.name_method = f"Google Maps ?{key}= 參數"
+            step(f"GMAPS_QUERY_{key.upper()}", nm, "由查詢參數抽店名")
+        if ad and not item.address:
+            item.address = ad
+            step(f"GMAPS_QUERY_{key.upper()}_ADDR", ad, "由查詢參數抽地址")
 
     # ⑤ 用地理詞典比對店名／地址
     hay = " ".join(filter(None, [item.name, decoded]))
@@ -152,6 +248,24 @@ def parse_gmaps(url: str) -> tuple[Item, list[dict[str, str]]]:
         step("GEO_MATCH", mr[0], f"地名比對命中「{mr[0]}」（{grp}）")
     else:
         step("GEO_MATCH", "(無命中)", "店名冇地區關鍵字 → 要靠座標反查（Nominatim）")
+
+    # ⑤b ⚠️⚠️ 座標 → 最近城市（國家／城市）
+    #
+    #   實測：貼 `/maps/place/35.6586,139.7454/` 嗰陣
+    #   country / city 全部 None（因為冇地名關鍵字可以 match）。
+    #   ✅ 用座標反查本機 134k 城市庫 —— 唔使上網。
+    if item.lat is not None and item.lng is not None and not item.country:
+        try:
+            from .localgeo import nearest as _nearest
+            near = _nearest(item.lat, item.lng)
+            # ⚠️ 只喺夠近（< 60km）嗰陣先用 —— 太遠就唔可靠
+            if near and (near.get("km") or 999) < 60:
+                item.country = item.country or near.get("country")
+                item.city = item.city or near.get("name")
+                step("GEO_REVERSE", f"{near.get('name')} ({near.get('km')}km)",
+                     f"由座標反查最近城市 → {near.get('country')}")
+        except Exception:
+            pass
 
     # ⑥ 分類
     from .caption import CaptionParser

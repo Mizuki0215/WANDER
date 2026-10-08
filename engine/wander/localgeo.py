@@ -158,6 +158,62 @@ def lookup(name: str, *, hint: str | None = None) -> Optional[dict]:
     return None
 
 
+def nearest(lat: float, lng: float, *, max_deg: float = 1.0) -> Optional[dict]:
+    """
+    座標 → 最近嘅城市（+ 國家）。
+
+    ⚠️ 為咩要：貼 Google Maps link 嗰陣**成日只有座標冇地名** ——
+       `/maps/place/35.6586,139.7454/` 或者 `?q=35.6586,139.7454`。
+       ⚠️ 之前會將「35.6586,139.7454」當做**店名**（明顯錯）。
+       ✅ 而家用座標反查最近城市 → 至少知喺邊個國家／城市。
+
+    ⚠️ 用**度**做粗略篩選（`max_deg`）先，再算真距離 ——
+       134k 個城市逐個算 Haversine 太慢；先用 bounding box 篩。
+
+    ⚠️ 搵唔到回 None（唔好拋錯）。
+    """
+    import math
+    try:
+        la, ln = float(lat), float(lng)
+    except (TypeError, ValueError):
+        return None
+    if not (-90 <= la <= 90 and -180 <= ln <= 180):
+        return None
+
+    cities = _cities()
+    # ⚠️ 反向索引（座標 → 名）由 `_cities()` 建 —— 但佢係 alias→記錄。
+    #    所以呢度要掃，不過先用 bounding box 收窄。
+    best = None
+    best_d = None
+    dlat = max_deg
+    # ⚠️ 經度要按緯度補償（高緯度 1 度經度短好多）
+    dlng = max_deg / max(0.15, math.cos(math.radians(la)))
+    for key, v in cities.items():
+        try:
+            clat, clng = float(v[0]), float(v[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if abs(clat - la) > dlat or abs(clng - ln) > dlng:
+            continue
+        # ⚠️ 粗略距離就夠（唔使真 Haversine —— 只係揀最近）
+        d = (clat - la) ** 2 + ((clng - ln) * math.cos(math.radians(la))) ** 2
+        if best_d is None or d < best_d:
+            best_d = d
+            best = v
+    if not best:
+        return None
+    cc = best[2] if len(best) > 2 else None
+    return {
+        "name": best[4] if len(best) > 4 else None,
+        "lat": float(best[0]), "lng": float(best[1]),
+        "country_code": cc,
+        "country": COUNTRY_ZH.get(cc or "", cc or ""),
+        "population": int(best[3] or 0) if len(best) > 3 else 0,
+        # ⚠️ 距離（公里，粗略）—— caller 可以判斷「夠唔夠近」
+        "km": round((best_d ** 0.5) * 111.0, 1),
+    }
+
+
 def search(prefix: str, *, limit: int = 8) -> list[dict]:
     """
     前綴搜尋（俾用戶打字時揀城市）。
