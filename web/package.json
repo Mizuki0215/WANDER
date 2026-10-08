@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node ../tests/web/ssr.test.mjs && node ../tests/web/api.test.mjs && node ../tests/web/dom.test.mjs && node ../tests/web/buttons.test.mjs && node ../tests/web/fixes4.test.mjs && node ../tests/web/selfcheck.test.mjs && node ../tests/web/responsive.test.mjs && node ../tests/web/render.test.mjs && node ../tests/web/bookmarklet.test.mjs && node ../tests/web/bookmarklet-dom.test.mjs && node ../tests/web/stops.test.mjs && node ../tests/web/sw.test.mjs"
+    "test": "node ../tests/web/ssr.test.mjs && node ../tests/web/api.test.mjs && node ../tests/web/dom.test.mjs && node ../tests/web/buttons.test.mjs && node ../tests/web/fixes4.test.mjs && node ../tests/web/selfcheck.test.mjs && node ../tests/web/responsive.test.mjs && node ../tests/web/render.test.mjs && node ../tests/web/bookmarklet.test.mjs && node ../tests/web/bookmarklet-dom.test.mjs && node ../tests/web/stops.test.mjs && node ../tests/web/sw.test.mjs && node ../tests/web/nav.test.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

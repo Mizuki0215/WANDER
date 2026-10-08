@@ -664,7 +664,7 @@ export default function App() {
             /* ⚠️⚠️ 用戶要求：唔好叫 Zone，叫 **Saved**。
                入面係「你收藏咗嘅景點」清單 + 搜尋 + 地名 facet。
                （分區排行程已經搬入 Planner 嘅「編排」。） */
-            <Saved items={items} onEditItem={setDetail} />
+            <Saved items={items} onEditItem={setDetail} onBack={() => setTab('home')} />
           )}
           {tab === 'money' && (
             <div className="screen">

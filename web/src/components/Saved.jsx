@@ -3,6 +3,12 @@ import { iconFor, confClass } from '../lib/api'
 import { toast } from '../lib/ui'
 import PixelIcon from './PixelIcon'
 
+/** ⚠️ Fallback：如果 App 冇傳 onBack，用 hash 令瀏覽器返主畫面。 */
+function setTabHome() {
+  try { window.location.hash = '' ; window.dispatchEvent(new HashChangeEvent('hashchange')) } catch {}
+  try { window.location.assign('/') } catch {}
+}
+
 /**
  * 收藏（Saved）
  * ==============
@@ -28,7 +34,7 @@ import PixelIcon from './PixelIcon'
  *   分區排行程已經搬入 Planner（編排）。
  *   呢度係「睇返 / 搵返你收藏咗嘅嘢」。
  */
-export default function Saved({ trip, items, onEditItem }) {
+export default function Saved({ trip, items, onEditItem, onBack }) {
   const [q, setQ] = useState('')
   const [picked, setPicked] = useState([])        // 已 tick 嘅地名
 
@@ -94,7 +100,14 @@ export default function Saved({ trip, items, onEditItem }) {
   return (
     <div style={{ paddingBottom: 30 }}>
       <div className="screen no-nav" style={{ paddingBottom: 6 }}>
-        <button className="btn sm ghost" onClick={() => history.back()}>‹ 返去</button>
+        {/* ⚠️⚠️ 用戶報：「撳返去 shopping 啦，又冇嘢睇啦」
+                ⚠️ 根因：呢度寫 `history.back()` ——
+                   但 Saved 係一個 **tab**（唔係 route）→
+                   `history.back()` 會跳咗**出 app**（或者去上一頁），
+                   用戶就見到一片空白。
+                ✅ 修法：用 `onBack` callback（App 話俾我哋知返去邊）。 */}
+        <button className="btn sm ghost"
+          onClick={() => (onBack ? onBack() : setTabHome())}>‹ 返去</button>
         <div style={{ textAlign: 'right', flex: 1 }}>
           <div style={{ fontWeight: 900, fontSize: 15 }}>🔖 收藏</div>
           <div className="sub" style={{ fontSize: 10 }}>
