@@ -59,3 +59,6 @@ docs/shots/*.html
 #    實測捉到：13 張相片（2.3MB）已經 commit 咗上 git！
 #    如果 repo 變 public → 你嘅私人相片公開。
 server/uploads/
+
+# 截圖工具嘅中間產物（唔使 commit）—— .png 要 commit
+docs/shots/*.html

@@ -36,7 +36,7 @@ function check(label, ok, extra = '') {
 }
 
 const USER = {
-  id: 'u1', email: 'icychan51@gmail.com', display_name: 'icyyy',
+  id: 'u1', email: 'user@example.com', display_name: 'icyyy',
   username: 'icyyy215', avatar: 'star', theme: 'galaxy',
 }
 const BASE = {
