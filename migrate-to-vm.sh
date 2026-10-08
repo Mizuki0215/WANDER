@@ -58,8 +58,17 @@ say "Bundle：$SRC（$(stat -c%s "$SRC" 2>/dev/null || stat -f%z "$SRC") bytes�
 say "檢查 bundle…"
 LIST="$(tar tzf "$SRC" 2>/dev/null || true)"
 [ -n "$LIST" ] || die "bundle 解唔到（可能壞咗）"
-printf '%s\n' "$LIST" | grep -q "wander.db" || die "bundle 入面冇 wander.db"
-N_UP="$(printf '%s\n' "$LIST" | grep -c 'uploads/' || true)"
+# ⚠️⚠️ 用 `case` 而唔係 `printf | grep -q` ——
+#    `printf` 一樣會收 SIGPIPE（管道一閂就死），
+#    `pipefail` 之下同樣會誤報。
+#    ✅ `case` 係 shell 內建，完全冇 pipe、冇 subprocess。
+case "$LIST" in
+  *wander.db*) ;;
+  *) die "bundle 入面冇 wander.db" ;;
+esac
+# ⚠️ 數 uploads 項 —— 唔用 `grep -c`（一樣有 pipe 風險），
+#    用 `case` 唔得（要數數），所以就用 awk（唔會提早退出）
+N_UP="$(printf '%s\n' "$LIST" | awk '/uploads\// {n++} END {print n+0}')"
 say "  ✓ 有 wander.db + ${N_UP} 個 uploads 項"
 
 # ── ② 停 app ──────────────────────────────────────────────────
