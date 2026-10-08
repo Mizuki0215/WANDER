@@ -60,6 +60,14 @@ _load_env()
 
 app = FastAPI(title="Wander API", version="0.1.0")
 
+# ⚠️⚠️ GZip 壓縮 ——
+#    `web/public/city-tz.json` 有 947 KB（城市→時區本地資料），
+#    gzip 之後 ~270 KB。冇壓縮嘅話手機下載好慢。
+#    ⚠️ 順便壓縮全部 JSON API 回應。
+#    ⚠️ minimum_size=800 —— 太細嘅回應壓縮反而更慢。
+from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
+app.add_middleware(GZipMiddleware, minimum_size=800)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],          # 本機開發；上線要收窄

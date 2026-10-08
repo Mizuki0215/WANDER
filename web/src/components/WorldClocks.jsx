@@ -31,6 +31,43 @@ import CityPicker from './CityPicker'
  * ⚠️ 揀咗嘅城市記喺 localStorage —— 唔使每次再揀。
  */
 
+/**
+ * 本地城市→時區資料檔（用戶要求）。
+ *
+ * ⚠️⚠️ 為咩要：
+ *   「整一個 File for 放低城市時間呢一啲嘅 data，
+ *    佢感應到原來係另一個時區就將你而家嘅時間做加減。」
+ *
+ * ⚠️ 格式：`{"v":1,"tz":["Asia/Tokyo",...],"cities":{"福岡":[12,"日本"],...}}`
+ *    · `tz` 係時區名嘅表（唔好每個城市重複寫 20 次）
+ *    · `cities` 嘅值係 `[tz 索引, 中文國名]`
+ *
+ * ⚠️ 載入一次就 cache 喺 module 變數（唔使每次查）。
+ */
+let _cityTz = null
+let _cityTzLoading = null
+
+function loadCityTz() {
+  if (_cityTz) return Promise.resolve(_cityTz)
+  if (_cityTzLoading) return _cityTzLoading
+  _cityTzLoading = fetch('/city-tz.json')
+    .then(r => (r.ok ? r.json() : null))
+    .then(d => { _cityTz = d; return d })
+    .catch(() => null)
+  return _cityTzLoading
+}
+
+/** ⚠️ 查本地檔（搵唔到回 null，唔會拋錯）。 */
+async function localTzOf(name) {
+  const d = await loadCityTz()
+  if (!d?.cities) return null
+  const key = String(name || '').trim().toLowerCase()
+  if (!key) return null
+  const hit = d.cities[key]
+  if (!hit) return null
+  return d.tz?.[hit[0]] || null
+}
+
 const KEY = 'wander.worldclock'      // { city, timezone }
 
 function readSaved() {
@@ -48,12 +85,45 @@ function save(v) {
 /** 兩個位。 */
 function pad(n) { return String(n).padStart(2, '0') }
 
-/** 由 nowIn() 攞 HH:MM。 */
+/**
+ * 由 `nowIn()` 攞 HH:MM。
+ *
+ * ⚠️⚠️ 用戶報：「你仲冇拎到個時間」
+ *
+ * ⚠️ 根因：`nowIn()` 回嘅係 **`hh` / `mm`**（兩個位字串），
+ *    但我寫咗 `d.hours` / `d.minutes` —— **兩個都唔存在** →
+ *    `pad(undefined)` → 顯示 `undefined:undefined`。
+ *
+ *    而且 fallback（`nowIn` 回 null 嗰陣）我用咗 `hours`/`minutes`
+ *    —— 同 `nowIn` 嘅 shape **唔一致**，即係兩邊都錯。
+ */
 function hhmm(d) {
-  return d ? `${pad(d.hours)}:${pad(d.minutes)}` : '--:--'
+  if (!d) return '--:--'
+  // ⚠️ 兩個 shape 都食：`nowIn()` 嘅 {hh,mm} 同 fallback 嘅 {hours,minutes}
+  const h = d.hh != null ? d.hh : d.hours
+  const m = d.mm != null ? d.mm : d.minutes
+  if (h == null || m == null) return '--:--'
+  return `${pad(h)}:${pad(m)}`
 }
 
-const WEEKDAY = ['日', '一', '二', '三', '四', '五', '六']
+/**
+ * 星期（中文）。
+ *
+ * ⚠️⚠️ 同一個 bug：`nowIn()` 回嘅 `weekday` 係 **英文短名**
+ *    （`'Mon'`、`'Tue'`…，因為 Intl 用咗 `weekday: 'short'`）。
+ *    我寫咗 `WEEKDAY[here.weekday]` —— `WEEKDAY['Mon']` 係 `undefined`。
+ *
+ * ✅ 修法：用一個英文 → 中文嘅對照表（唔靠 index）。
+ */
+const WD_EN = { Sun: '日', Mon: '一', Tue: '二', Wed: '三', Thu: '四', Fri: '五', Sat: '六' }
+const WD_ZH = ['日', '一', '二', '三', '四', '五', '六']
+
+function weekdayZh(d) {
+  if (!d) return ''
+  if (typeof d.weekday === 'string') return WD_EN[d.weekday] || ''
+  if (typeof d.weekday === 'number') return WD_ZH[d.weekday] || ''
+  return ''
+}
 
 export default function WorldClocks({ tripCity, tripTz }) {
   const [now, setNow] = useState(() => new Date())
@@ -83,9 +153,13 @@ export default function WorldClocks({ tripCity, tripTz }) {
 
   const same = !target?.timezone || sameZone(myTz, target.timezone)
   const there = target?.timezone ? nowIn(target.timezone) : null
+  // ⚠️ fallback 嘅 shape 一定要同 `nowIn()` **一致**（hh/mm/weekday）
+  //    —— 之前用咗 hours/minutes，兩邊都攞唔到。
   const here = nowIn(myTz) || {
-    hours: now.getHours(), minutes: now.getMinutes(),
-    weekday: now.getDay(), iso: now.toISOString().slice(0, 10),
+    hh: pad(now.getHours()), mm: pad(now.getMinutes()),
+    weekday: WD_ZH[now.getDay()],
+    iso: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+    tz: myTz,
   }
 
   const myOff = offsetMinutes(myTz)
@@ -116,21 +190,42 @@ export default function WorldClocks({ tripCity, tripTz }) {
   async function fetchTz(city, r) {
     const q = (r?.matched || city || '').trim()
     setPicked({ city: q, timezone: '', pending: true })
-    try {
-      const { api } = await import('../lib/api')
-      const d = await api.tz(q)
-      if (d?.tz) {
-        const v = { city: d.matched || q, timezone: d.tz,
-                    country: d.country, confident: d.confident }
-        setPicked(v); save(v)
-      } else {
+
+    // ⚠️⚠️ ① 先用**本地資料檔**（`/city-tz.json`）——
+    //    用戶要求：「整一個 File for 放低城市時間呢一啲嘅 data，
+    //              佢感應到原來係另一個時區就將你而家嘅時間做加減」
+    //
+    //    ⚠️ 為咩本地檔優先：
+    //       · **唔使網絡** —— 飛機上／地鐵／外國漫遊都用得
+    //       · **即時** —— 唔使等 server round-trip
+    //       · 947 KB（gzip ~270 KB），載入一次就 cache 喺瀏覽器
+    let tzName = await localTzOf(q)
+    let matched = q, country = ''
+
+    // ⚠️ ② 本地檔搵唔到 → 才問後端（134k 城市，但慢啲）
+    if (!tzName) {
+      try {
+        const { api } = await import('../lib/api')
+        const d = await api.tz(q)
+        tzName = d?.tz
+        matched = d?.matched || q
+        country = d?.country || ''
+      } catch (e) {
         setPicked(null); save(null)
-        ;(await import('../lib/ui')).toast(`「${q}」冇時區資料`)
+        ;(await import('../lib/ui')).toast(`搵唔到「${q}」嘅時區`)
+        return
       }
-    } catch (e) {
-      setPicked(null); save(null)
-      ;(await import('../lib/ui')).toast(`搵唔到時區：${e.message}`)
     }
+
+    if (!tzName) {
+      setPicked(null); save(null)
+      ;(await import('../lib/ui')).toast(`「${q}」冇時區資料`)
+      return
+    }
+    // ⚠️⚠️ 由**現在嘅時間**加減（`nowIn()` 用 Intl 自己計）——
+    //    唔使記住 offset，夏令時間都會自動跟。
+    const v = { city: matched, timezone: tzName, country }
+    setPicked(v); save(v)
   }
 
   function clear() {
@@ -147,7 +242,7 @@ export default function WorldClocks({ tripCity, tripTz }) {
         {hhmm(here)}
       </div>
       <div className="sub" style={{ fontSize: 11, marginTop: 5 }}>
-        {WEEKDAY[here.weekday] != null ? `星期${WEEKDAY[here.weekday]}` : ''}
+        {weekdayZh(here) ? `星期${weekdayZh(here)}` : ''}
         {myTz ? ` · ${tzLabel(myTz)}` : ''}
         {' · 你嘅時間'}
       </div>

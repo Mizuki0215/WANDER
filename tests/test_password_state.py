@@ -419,3 +419,170 @@ class TestTrayCityGrouping:
     def test_uses_build_day_cities(self, dg):
         """⚠️ 要由旅程嘅城市清單計「今日係邊個城市」。"""
         assert "buildDayCities" in dg, "冇用 buildDayCities"
+
+
+# ══════════════════════════════════════════════════════════════
+# ⑧ 時間顯示 bug + 本地城市時區資料檔
+# ══════════════════════════════════════════════════════════════
+
+class TestClockTimeActuallyShows:
+    """
+    ⚠️⚠️ 用戶報：「你仲冇拎到個時間」
+
+    ⚠️ 根因：`nowIn()` 回嘅係 **`hh` / `mm`**（兩個位字串），
+       但我寫咗 `d.hours` / `d.minutes` —— 兩個都唔存在 →
+       `pad(undefined)` → 顯示 `undefined:undefined`。
+
+    ⚠️ 而且 `weekday` 係**英文短名**（`'Mon'`），
+       我寫 `WEEKDAY[here.weekday]` → `WEEKDAY['Mon']` = `undefined`。
+    """
+
+    @pytest.fixture(scope="class")
+    def wc(self):
+        return code(WEB / "components" / "WorldClocks.jsx")
+
+    def test_uses_hh_mm_not_hours_minutes(self, wc):
+        """
+        ⚠️⚠️ 核心 —— 要用 `nowIn()` 真正回嘅欄位（`hh`/`mm`）。
+        """
+        i = wc.index("function hhmm(")
+        blk = wc[i:i + 500]
+        assert "d.hh" in blk, "冇用 d.hh（nowIn 回嘅係 hh）"
+        assert "d.mm" in blk, "冇用 d.mm（nowIn 回嘅係 mm）"
+
+    def test_handles_both_shapes(self, wc):
+        """
+        ⚠️⚠️ fallback 嘅 shape 一定要食到 ——
+           我之前 fallback 用 `hours`/`minutes`，
+           同 `nowIn()` 嘅 `hh`/`mm` 唔一致 → 兩邊都出唔到時間。
+        """
+        i = wc.index("function hhmm(")
+        blk = wc[i:i + 500]
+        assert "d.hours" in blk, "冇食 fallback 嘅 hours"
+        assert "d.minutes" in blk, "冇食 fallback 嘅 minutes"
+
+    def test_nowin_shape_unchanged(self):
+        """
+        ⚠️ 確認 `nowIn()` 真係回 `hh`/`mm`（唔係我記錯）。
+        """
+        s = (WEB / "lib" / "tz.js").read_text(encoding="utf-8")
+        i = s.index("export function nowIn")
+        blk = s[i:i + 900]
+        assert "hh:" in blk, "nowIn 冇回 hh"
+        assert "mm:" in blk, "nowIn 冇回 mm"
+        assert "hours:" not in blk, "nowIn 竟然回 hours？（同 hhmm 唔一致）"
+
+    def test_weekday_handles_english_string(self, wc):
+        """
+        ⚠️⚠️ `nowIn()` 嘅 `weekday` 係**英文短名**（`'Mon'`）——
+           `WEEKDAY['Mon']` 一定 undefined。
+        """
+        assert "WD_EN" in wc, "冇英文→中文星期對照"
+        for en in ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]:
+            assert en in wc, f"WD_EN 冇 {en}"
+
+    def test_weekday_helper_exists(self, wc):
+        assert "function weekdayZh(" in wc, "冇 weekdayZh"
+        i = wc.index("function weekdayZh(")
+        blk = wc[i:i + 400]
+        # ⚠️ 要食 string（英文）同 number（fallback）
+        assert "typeof d.weekday === 'string'" in blk, "冇處理英文 string"
+        assert "typeof d.weekday === 'number'" in blk, "冇處理 number"
+
+    def test_fallback_shape_matches(self, wc):
+        """⚠️ fallback 要用 `pad()` 產生兩個位（同 nowIn 一致）。"""
+        i = wc.index("const here = nowIn(myTz) || {")
+        blk = wc[i:i + 400]
+        assert "hh: pad(" in blk, "fallback 冇用 hh"
+        assert "mm: pad(" in blk, "fallback 冇用 mm"
+
+
+class TestCityTzDataFile:
+    """
+    ⚠️ 用戶要求：
+       「一係你就整一個 File for 放低市區城市時間呢一啲嘅 data，
+        佢感應到原來係另一個時區就將你而家嘅時間做加減。」
+
+    ⚠️ 為咩要本地檔（而唔係每次問後端）：
+       · **唔使網絡** —— 飛機上／地鐵／外國漫遊都用得
+       · **即時** —— 唔使等 round-trip
+    """
+
+    def test_generator_exists(self):
+        assert (ROOT / "engine" / "make_city_tz.py").exists(), \
+            "冇 engine/make_city_tz.py"
+
+    def test_data_file_exists(self):
+        p = ROOT / "web" / "public" / "city-tz.json"
+        assert p.exists(), "冇 web/public/city-tz.json"
+
+    def test_data_file_shape(self):
+        """⚠️ 格式：tz 表 + cities（唔好每城重複時區名）。"""
+        import json
+        p = ROOT / "web" / "public" / "city-tz.json"
+        d = json.loads(p.read_text(encoding="utf-8"))
+        assert "tz" in d and isinstance(d["tz"], list), "冇 tz 表"
+        assert "cities" in d and isinstance(d["cities"], dict), "冇 cities"
+        # ⚠️ 抽查
+        v = d["cities"].get("福岡")
+        assert v, "冇「福岡」"
+        assert d["tz"][v[0]] == "Asia/Tokyo", f"福岡時區錯：{d['tz'][v[0]]}"
+
+    def test_file_size_reasonable(self):
+        """
+        ⚠️⚠️ 唔可以太大 —— 手機要下載。
+           ⚠️ 我第一版 2.7 MB（每個城市 15 個別名）。
+           而家 ~950 KB（gzip ~280 KB）。
+        """
+        p = ROOT / "web" / "public" / "city-tz.json"
+        kb = p.stat().st_size / 1024
+        assert kb < 1500, f"city-tz.json 有 {kb:.0f} KB —— 太大"
+
+    def test_chinese_and_english_names(self):
+        """
+        ⚠️⚠️ 中英文名**都要**有 ——
+           我第一版用 `max(cjk, key=len)` 揀咗「福岡市」，
+           但用戶打「福岡」→ 24 個測試城市只中 11 個。
+        """
+        import json
+        d = json.loads((ROOT / "web" / "public" / "city-tz.json")
+                       .read_text(encoding="utf-8"))
+        c = d["cities"]
+        for k in ["福岡", "fukuoka", "東京", "tokyo", "香港",
+                  "首爾", "seoul", "台北", "taipei", "曼谷", "bangkok"]:
+            assert k in c, f"冇「{k}」"
+
+    def test_gzip_enabled(self):
+        """
+        ⚠️⚠️ 947 KB 一定要 gzip（→ ~280 KB）——
+           唔係嘅話手機下載好慢。
+        """
+        s = (ROOT / "server" / "app" / "main.py").read_text(encoding="utf-8")
+        assert "GZipMiddleware" in s, "冇 gzip middleware"
+
+    def test_frontend_uses_local_first(self):
+        """
+        ⚠️ 前端要**本地檔優先**，搵唔到才問後端。
+        """
+        s = code(WEB / "components" / "WorldClocks.jsx")
+        assert "loadCityTz" in s, "冇載入本地檔"
+        assert "localTzOf" in s, "冇查本地檔"
+        assert "city-tz.json" in s, "冇 fetch 本地檔"
+        # ⚠️ 次序：本地 → 後端
+        assert s.index("localTzOf") < s.index("api.tz"), \
+            "本地檔唔係優先"
+
+    def test_caches_data(self):
+        """⚠️ 載入一次就 cache（唔使每次查）。"""
+        s = code(WEB / "components" / "WorldClocks.jsx")
+        assert "_cityTz" in s, "冇 cache 變數"
+
+    def test_offline_after_pick(self):
+        """
+        ⚠️⚠️ 揀咗之後**完全離線**都用得 ——
+           `nowIn()` 用 Intl 自己計，唔使網絡。
+        """
+        s = code(WEB / "components" / "WorldClocks.jsx")
+        assert "localStorage" in s, "冇記住揀咗嘅城市"
+        tz = (WEB / "lib" / "tz.js").read_text(encoding="utf-8")
+        assert "Intl.DateTimeFormat" in tz, "冇用 Intl（離線計唔到）"
