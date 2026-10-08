@@ -18,6 +18,78 @@ import { STOP_COLORS, findConflicts, stopsSummary } from '../lib/stops'
  *     由於地區改變了有行程有衝突，是否幫你 delete 佢？
  *     揀 Yes 就 delete，揀 No 就唔 delete 但用另一隻顏色 highlight 話係 warning。」
  */
+/**
+ * 日數輸入 —— **手機都用得**
+ * ============================
+ *
+ * ⚠️⚠️ 用戶報（附手機截圖）：
+ *   「我用電腦版，嗰日數係可以撳掣增加／減少；
+ *    但係手機版嘅話呢，我想修改日子嘅話呢，
+ *    我係唔可以剷咗個『1』⋯變相我只可以改個數字就係之後嘅數字，
+ *    導致到我每次入日子我都係入十幾。」
+ *
+ * ⚠️ 根因有兩個：
+ *
+ *   ① `setDays()` 寫 `Number(v) || 1`
+ *      → 剷走個「1」變空字串 → `Number('') = 0` → `0 || 1 = 1`
+ *      → **即刻彈返 1**，個欄永遠清唔到
+ *      → 只可以喺「1」後面打字 → 變「15」
+ *      （⚠️ 經典嘅 controlled number input bug）
+ *
+ *   ② `<input type="number">` 嘅 ▲▼ 箭嘴
+ *      → **桌面**有（用戶講嘅「撳掣」就係佢）
+ *      → **手機完全冇** → 手機用戶一定要打字
+ *
+ * ✅ 修法：
+ *   · 保留**原始字串**（`raw`）—— 空字串係合法嘅**過渡狀態**
+ *   · 離開個欄（blur）或者撳掣先 clamp 1–60
+ *   · 加 **＋／−** 掣 → 手機都撳得
+ *
+ * ⚠️ 一定要喺**模組層**定義 ——
+ *    喺 render 入面定義會令 React 每次 render 當佢係新元件
+ *    → unmount/remount → **輸入框每打一個字就失焦**（中過）
+ */
+function DaysInput({ value, onChange, max = 60 }) {
+  // ⚠️ `raw` 係用戶打字嘅原字串 —— 可以係 ''（空）
+  const [raw, setRaw] = useState(null)
+  const shown = raw !== null ? raw : String(value)
+
+  function commit(str) {
+    const n = Number(str)
+    // ⚠️ 空或者唔係數字 → 還原（唔可以留低 NaN）
+    if (!String(str).trim() || Number.isNaN(n)) { setRaw(null); return }
+    onChange(Math.max(1, Math.min(max, Math.round(n))))
+    setRaw(null)
+  }
+
+  function bump(d) {
+    // ⚠️ 撳掣用 `value`（唔用 raw）—— 未 commit 嘅字串當唔存在
+    onChange(Math.max(1, Math.min(max, (Number(value) || 1) + d)))
+    setRaw(null)
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 3, flex: '0 0 auto' }}>
+      <button type="button" className="btn sm ghost"
+        onClick={() => bump(-1)} disabled={value <= 1}
+        aria-label="少一日"
+        style={{ padding: '5px 8px', fontSize: 13, lineHeight: 1 }}>−</button>
+      <input className="input" type="text" inputMode="numeric" pattern="[0-9]*"
+        value={shown}
+        // ⚠️⚠️ 唔可以喺呢度 clamp！要原字串照收 ——
+        //    唔係嘅話剷走個「1」會即刻彈返嚟（用戶報嘅 bug）
+        onChange={e => setRaw(e.target.value.replace(/[^0-9]/g, ''))}
+        onBlur={e => commit(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        style={{ width: 38, textAlign: 'center', fontWeight: 700, padding: '5px 2px' }} />
+      <button type="button" className="btn sm ghost"
+        onClick={() => bump(1)} disabled={value >= max}
+        aria-label="多一日"
+        style={{ padding: '5px 8px', fontSize: 13, lineHeight: 1 }}>＋</button>
+    </div>
+  )
+}
+
 export default function StopsEditor({ trip, items, stops, onRefresh, onClose }) {
   const [draft, setDraft] = useState(() => {
     const init = (stops || []).map(s => ({ city: s.city, days: Number(s.days) || 1 }))
@@ -64,7 +136,13 @@ export default function StopsEditor({ trip, items, stops, onRefresh, onClose }) 
     setDraft(d => (d.length <= 1 ? d : d.filter((_, k) => k !== i)))
   }
   function setDays(i, v) {
-    setDraft(d => d.map((s, k) => (k === i ? { ...s, days: Math.max(1, Math.min(60, Number(v) || 1)) } : s)))
+    // ⚠️ `DaysInput` 已經 clamp 咗（1–60）—— 呢度再夾一次係**防禦**。
+    //    ⚠️ 但唔可以再用 `Number(v) || 1` ——
+    //       空字串會變 1，就係用戶報「剷唔到個 1」嘅元兇。
+    const n = Number(v)
+    const days = Number.isFinite(n) && n > 0
+      ? Math.max(1, Math.min(60, Math.round(n))) : 1
+    setDraft(d => d.map((s, k) => (k === i ? { ...s, days } : s)))
   }
   function setCity(i, v) {
     setDraft(d => d.map((s, k) => (k === i ? { ...s, city: v } : s)))
@@ -151,9 +229,7 @@ export default function StopsEditor({ trip, items, stops, onRefresh, onClose }) 
               placeholder="城市（打中文／英文）"
               onChange={v => setCity(i, v)}
               onPick={r => { setSug(r.matched ? `${r.query}（${r.matched}）` : r.query); setSugFor(i) }} />
-            <input className="input" type="number" min="1" max="60" value={s.days}
-              onChange={e => setDays(i, e.target.value)}
-              style={{ width: 66, textAlign: 'center', fontWeight: 700 }} />
+            <DaysInput value={s.days} onChange={v => setDays(i, v)} />
             <span className="sub" style={{ fontSize: 11, flex: '0 0 auto' }}>日</span>
             <button className="btn sm ghost" style={{ padding: '6px 9px', fontSize: 12 }}
               onClick={() => removeCity(i)} disabled={draft.length <= 1}>✕</button>

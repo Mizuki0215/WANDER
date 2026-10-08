@@ -424,3 +424,137 @@ class TestFriendRequestUx:
         blk = srv[i:i + 1800]
         assert "AS request_id" in blk, "冇 request_id"
         assert "AS user_id" in blk, "冇 user_id（會同 id 撞）"
+
+
+# ══════════════════════════════════════════════════════════════
+# ⑥ 日數輸入（手機剷唔到個「1」）+ 刪「目的地」欄
+# ══════════════════════════════════════════════════════════════
+
+class TestDaysInput:
+    """
+    ⚠️⚠️ 用戶報（附手機截圖）：
+       「我用電腦版，嗰日數係可以撳掣增加／減少；但係手機版嘅話呢，
+        我想修改日子嘅話呢，我係唔可以剷咗個『1』⋯變相我只可以改
+        個數字就係之後嘅數字，導致到我每次入日子我都係入十幾。」
+
+    ⚠️ 根因兩個：
+       ① `Number(v) || 1` → 空字串變 1 → **剷唔到**
+       ② `<input type="number">` 嘅 ▲▼ 箭嘴**手機冇**
+    """
+
+    @pytest.fixture(scope="class")
+    def se(self):
+        return code(WEB / "components" / "StopsEditor.jsx")
+
+    def test_no_number_or_one_pattern(self, se):
+        """
+        ⚠️⚠️ 核心：`Number(v) || 1` 呢個 pattern 一定要消失 ——
+           空字串 → 0 → `0 || 1` → 1 → 剷唔到。
+        """
+        i = se.index("function setDays(")
+        blk = se[i:i + 500]
+        assert "Number(v) || 1" not in blk, \
+            "仲有 `Number(v) || 1`（空字串會變 1 → 剷唔到）"
+
+    def test_has_days_input_component(self, se):
+        assert "function DaysInput(" in se, "冇 DaysInput 元件"
+
+    def test_days_input_is_module_level(self, se):
+        """
+        ⚠️ 一定要喺**模組層** —— 喺 render 入面定義會令
+           React 每次 render 當佢係新元件 → 輸入框每打一個字就失焦。
+        """
+        # ⚠️ 喺 `export default function StopsEditor` 之前
+        i_comp = se.index("function DaysInput(")
+        i_main = se.index("export default function StopsEditor")
+        assert i_comp < i_main, "DaysInput 唔喺模組層"
+
+    def test_keeps_raw_string_while_editing(self, se):
+        """
+        ⚠️⚠️ 關鍵修法：保留**原始字串** ——
+           空字串係合法嘅**過渡狀態**，唔可以即刻 clamp。
+        """
+        assert "setRaw(" in se, "冇保留原始字串"
+        assert "raw !== null ? raw :" in se, "冇用 raw 做顯示值"
+
+    def test_onchange_does_not_clamp(self, se):
+        """⚠️ `onChange` 唔可以 clamp —— 要原字串照收。"""
+        i = se.index("function DaysInput(")
+        blk = se[i:i + 2000]
+        # ⚠️ onChange 嗰行唔可以有 Math.max/min
+        for line in blk.split("\n"):
+            if "onChange={e =>" in line and "setRaw" in line:
+                assert "Math.max" not in line and "Math.min" not in line, \
+                    "onChange 有 clamp → 剷走個數字會即刻彈返"
+                break
+        else:
+            pytest.fail("搵唔到 onChange")
+
+    def test_clamps_on_blur(self, se):
+        """⚠️ 離開個欄先 clamp（1–60）。"""
+        i = se.index("function DaysInput(")
+        blk = se[i:i + 2000]
+        assert "onBlur=" in blk, "冇 onBlur"
+        assert "function commit(" in blk, "冇 commit 函數"
+        assert "Math.max(1, Math.min(max" in blk, "commit 冇 clamp"
+
+    def test_has_plus_minus_buttons(self, se):
+        """
+        ⚠️⚠️ 手機冇 ▲▼ 箭嘴 → 一定要有**自己嘅 ＋／− 掣**。
+           呢個就係用戶講「電腦版可以撳掣」但手機唔得嘅原因。
+        """
+        i = se.index("function DaysInput(")
+        blk = se[i:i + 2400]
+        assert "bump(-1)" in blk, "冇「−」掣"
+        assert "bump(1)" in blk, "冇「＋」掣"
+        assert 'aria-label="少一日"' in blk, "冇 accessible label"
+        assert 'aria-label="多一日"' in blk, "冇 accessible label"
+
+    def test_buttons_disable_at_bounds(self, se):
+        """⚠️ 1 嘅時候唔可以再減；60 嘅時候唔可以再加。"""
+        i = se.index("function DaysInput(")
+        blk = se[i:i + 2400]
+        assert "disabled={value <= 1}" in blk, "冇擋 0"
+        assert "disabled={value >= max}" in blk, "冇擋上限"
+
+    def test_uses_numeric_keyboard(self, se):
+        """⚠️ 手機要彈數字鍵盤。"""
+        i = se.index("function DaysInput(")
+        blk = se[i:i + 2000]
+        assert 'inputMode="numeric"' in blk, "冇 inputMode（手機彈唔到數字鍵盤）"
+
+    def test_handles_nan(self, se):
+        """⚠️ 清空晒再離開 → 要還原，唔可以留 NaN。"""
+        i = se.index("function DaysInput(")
+        blk = se[i:i + 2000]
+        assert "Number.isNaN(n)" in blk, "冇處理 NaN"
+
+
+class TestDestinationFieldRemoved:
+    """
+    ⚠️ 用戶原話：
+       「加入去城市嗰度其實取消咗有個叫做目的地嗰個，
+        都冇咩用，淨係要加城市咪得囉。」
+    """
+
+    def test_no_destination_input(self):
+        """⚠️ 新旅程表單唔應該再有「目的地」輸入。"""
+        s = (WEB / "components" / "Trips.jsx").read_text(encoding="utf-8")
+        assert '<CityPicker value={form.destination}' not in s, \
+            "仲有「目的地」CityPicker"
+
+    def test_destination_still_derived_from_first_city(self):
+        """
+        ⚠️ 刪咗個欄，但 `destination` 一定要繼續有人填 ——
+           唔係嘅話地圖／雙時鐘會冇中心。
+        """
+        s = code(WEB / "components" / "Trips.jsx")
+        assert "form.destination" in s, "destination 完全冇人填"
+        # ⚠️ 一定要有「用第一個城市」嘅邏輯
+        assert "stops[0]?.city" in s or "stops[0].city" in s, \
+            "冇用第一個城市做 destination"
+
+    def test_destination_explained_in_comment(self):
+        """⚠️ 要解釋為咩刪（唔可以靜靜咁刪）。"""
+        s = (WEB / "components" / "Trips.jsx").read_text(encoding="utf-8")
+        assert "「目的地」欄已經" in s, "冇解釋為咩刪"

@@ -175,14 +175,21 @@ export default function Trips({ trips, onOpen, onRefresh, currentId = null,
           </div>
           <input className="input" placeholder="旅程名（例：福岡 2027）" value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-          {/* ⚠️⚠️ 目的地一定要「揀」而唔係「打字」——
-                 用戶報嘅真 bug：佢打「香港」落呢個欄，
-                 但地圖只讀 🧭 城市編輯器（空嘅）→ 地圖跌落福岡。
-                 而家用 134k 本地城市庫即時搜尋，撳一下就揀實（有座標）。 */}
-          <CityPicker value={form.destination}
-            placeholder="目的地（打中文／英文，撳一下揀）"
-            onChange={v => setForm(f => ({ ...f, destination: v }))}
-            onPick={r => setForm(f => ({ ...f, destination: r.query }))} />
+          {/* ⚠️⚠️ 「目的地」欄已經**刪走**。
+                 用戶原話：
+                   「加入去城市嗰度其實取消咗有個叫做目的地嗰個，
+                    都冇咩用，淨係要加城市咪得囉。」
+
+                 ⚠️ 為咩可以刪：
+                   · 目的地**就係第一個城市** ——
+                     下面個城市清單第一行已經係目的地
+                   · 之前呢個欄仲係**陷阱**：
+                     用戶打「香港」落呢度，但地圖只讀城市清單
+                     （空嘅）→ 地圖跌落錯地方
+                   · 兩個地方入同一資訊 = 一定會唔一致
+
+                 ✅ `form.destination` 照樣有人填 ——
+                    喺 `addCity()` 自動用第一個城市。 */}
 
           {/* ══════════════════════════════════════════════════════
               多城市清單（用戶要求）
