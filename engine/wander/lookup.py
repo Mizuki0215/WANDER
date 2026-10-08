@@ -926,8 +926,27 @@ def enrich_caption_item(item: Item, *, use_search: bool = True,
                     f"LOCAL_GEO — 「{cand}」→ {hit['lat']:.4f},{hit['lng']:.4f}"
                     f"（{hit.get('country') or ''}，本地庫，免搜尋）",
                 ]
-    found, log = lookup_place(item.name, hint=hint, use_search=use_search,
-                              fetch_details=fetch_details, verbose=verbose)
+    # ⚠️⚠️ 如果 item 有**完整地址**，一定要用地址嚟消歧義。
+    #
+    #   實測捉到嘅危險：
+    #     「Restaurante & Cafetería Beluga」
+    #       地址寫住 València（46002 València）
+    #       但淨係用店名搜尋 → 中咗 **Astorga**（差 600km！）
+    #
+    #   ⚠️ 旅行 app 錯座標特別危險 —— 用戶會跟住去錯城市。
+    #      ✅ 有地址就由地址尾段（城市／郵區）砌一個 hint。
+    addr = getattr(item, "address", None) or ""
+    if addr and not hint:
+        # ⚠️ 攞地址最後兩段（通常係「城市, 國家」或者「郵區 城市」）
+        parts = [x.strip() for x in addr.split(",") if x.strip()]
+        if len(parts) >= 2:
+            hint = ", ".join(parts[-2:])
+            log.append(f"用地址消歧義 → hint=「{hint}」"
+                       f"（同名店好多，淨用店名會揀錯城市）")
+
+    found, log2 = lookup_place(item.name, hint=hint, use_search=use_search,
+                               fetch_details=fetch_details, verbose=verbose)
+    log.extend(log2)
 
     # 用找到嘅資料補空缺（唔覆蓋 caption 已經有嘅嘢）
     coords = (item.lat, item.lng)

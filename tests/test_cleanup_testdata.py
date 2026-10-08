@@ -185,14 +185,19 @@ class TestCurrentDatabase:
 
     def test_real_data_intact(self):
         """
-        ⚠️⚠️ 最重要：真實用戶嘅旅程／景點數目冇少。
-           （清理前後對比過，所以呢度寫死個數。）
+        ⚠️⚠️ 最重要：真實用戶嘅旅程／景點數目**冇少**。
+
+        ⚠️⚠️ 用 `>=` 唔用 `==` ——
+           用戶會**繼續加嘢**（實測：加咗 BOOKOFF + 萬寧 + Beluga），
+           寫死數目會變假失敗。
+           呢個測試嘅目的係「清理冇刪到用戶嘢」，唔係「數量唔變」。
         """
         import sqlite3
         db = ROOT / "server" / "wander.db"
         if not db.exists():
             pytest.skip("冇 DB")
         c = sqlite3.connect(db)
+        # ⚠️ 清理當日嘅數量（下限 —— 用戶之後可以加多啲）
         expected = {
             U1: [("Fukuoka", 2, 2)],
             U2: [("fukuoka", 7, 1), ("trip", 3, 3), ("my", 0, 0)],
@@ -210,5 +215,5 @@ class TestCurrentDatabase:
                                   (row[0],)).fetchone()[0]
                 got_s = c.execute("SELECT COUNT(*) FROM shopping_items WHERE trip_id=?",
                                   (row[0],)).fetchone()[0]
-                assert got_i == n_items, f"「{name}」景點 {n_items}→{got_i}"
-                assert got_s == n_shop, f"「{name}」購物 {n_shop}→{got_s}"
+                assert got_i >= n_items, f"⚠️「{name}」景點由 {n_items} 跌到 {got_i} —— 有嘢冇咗！"
+                assert got_s >= n_shop, f"⚠️「{name}」購物由 {n_shop} 跌到 {got_s} —— 有嘢冇咗！"

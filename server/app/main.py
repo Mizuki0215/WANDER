@@ -1875,8 +1875,55 @@ def lookup(name: str, hint: Optional[str] = None,
 
 @app.post("/api/items")
 def create_item(trip_id: str, parsed: dict, user: dict = Depends(current_user)) -> dict:
-    """將一個解析好嘅 item 存入 trip。"""
+    """
+    將一個解析好嘅 item 存入 trip。
+
+    ⚠️⚠️ 用戶報：「我擺咗條 link 上去，但係唔知點解佢冇新增落去
+       嗰個已收藏景點度」
+
+       ⚠️ 查證：其實**加咗**，但**加咗兩次**（BOOKOFF 有 2 行）。
+          因為：
+            ① 前端 `catch {}` 靜靜食咗錯誤
+            ② 加完冇明顯 feedback → 用戶以為冇加到 → 再撳
+            ③ **後端完全冇重複檢查** → 撳幾次就加幾次
+
+    ✅ 修法：入之前檢查有冇**同一個地方**喺同一個旅程入面：
+       · 同名 **而且**（同座標 或 同來源 URL）→ 當重複
+       · 重複就回**現有嗰個** + `duplicate: True`（唔會拋錯）
+         —— 咁前端可以話「已經喺收藏度」而唔係當失敗
+    """
     _require_member(trip_id, user["id"])
+
+    # ⚠️⚠️ 去重：同名 + 同座標（或者同 URL）
+    name = (parsed.get("name") or "").strip()
+    lat, lng = parsed.get("lat"), parsed.get("lng")
+    src_url = (parsed.get("url") or "").strip()
+    if name:
+        with db.connect() as conn:
+            cands = conn.execute(
+                """SELECT * FROM items
+                   WHERE trip_id = ? AND lower(trim(name)) = lower(?)""",
+                (trip_id, name)).fetchall()
+        for row in cands:
+            same_coord = (
+                lat is not None and row["lat"] is not None
+                and abs(float(row["lat"]) - float(lat)) < 1e-5
+                and abs(float(row["lng"]) - float(lng)) < 1e-5
+            )
+            same_url = False
+            if src_url:
+                try:
+                    old_p = json.loads(row["parsed"] or "{}")
+                    same_url = (old_p.get("url") or "").strip() == src_url
+                except (ValueError, TypeError):
+                    same_url = False
+            # ⚠️ 冇座標又冇 URL 嘅話，同名就當重複（保守：寧願唔加）
+            no_geo = lat is None and not src_url
+            if same_coord or same_url or no_geo:
+                out = db.item_row_to_api(row)
+                out["duplicate"] = True
+                return out
+
     iid = _new_id("item")
     with db.connect() as conn:
         nxt = conn.execute(

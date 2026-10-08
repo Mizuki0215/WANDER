@@ -50,6 +50,40 @@ export default function Discover({ tripId, items, onRefresh, onOpenMap, onEditIt
     return Object.entries(g).sort((a, b) => b[1].length - a[1].length)
   }, [filtered])
 
+  /**
+   * ⚠️⚠️ 存入收藏 —— **一定要報實情**。
+   *
+   *   ⚠️ 唔可以 `catch {}` —— 咁樣加失敗都會顯示「已加入 0 個 ✓」，
+   *      用戶以為成功但收藏度冇嘢（用戶報嘅 bug）。
+   *
+   *   ⚠️ 後端會回 `duplicate: true`（同一個地方已經喺收藏度）——
+   *      呢個**唔係**錯誤，要分開講。
+   */
+  async function saveAll(found) {
+    let added = 0, dup = 0
+    const errs = []
+    for (const it of found) {
+      try {
+        const r = await api.addItem(tripId, it)
+        if (r?.duplicate) dup++
+        else added++
+      } catch (e) {
+        errs.push(`${it.name || '（無名）'}：${e.message}`)
+      }
+    }
+    const parts = []
+    if (added) parts.push(`新增 ${added} 個`)
+    if (dup) parts.push(`${dup} 個已經喺收藏度`)
+    if (errs.length) parts.push(`${errs.length} 個失敗`)
+    if (!parts.length) parts.push('冇嘢可以加')
+    // ⚠️ 全部失敗 / 冇新增 → 唔好用 ✓（會誤導）
+    const ok = added > 0
+    toast(`${ok ? '✓ ' : '⚠️ '}${parts.join(' · ')}`)
+    if (errs.length) setSteps(prev => [...prev,
+      ...errs.slice(0, 3).map(e => ({ t: e, k: 'err' }))])
+    return { added, dup, errs }
+  }
+
   async function runParse() {
     // ⚠️ 先檢查係唔係書籤小工具嘅 payload（用戶貼上嚟嘅）
     const bm = parsePayload(text) || parsePayload(url)
@@ -84,12 +118,21 @@ export default function Discover({ tripId, items, onRefresh, onOpenMap, onEditIt
         return
       }
 
-      // 自動存入 trip
-      let saved = 0
-      for (const it of found) {
-        try { await api.addItem(tripId, it); saved++ } catch {}
-      }
-      toast(`已加入 ${saved} 個收藏 ✓`)
+      // ⚠️⚠️ 自動存入 trip —— **一定要報實情**
+      //
+      //   用戶報：「我擺咗條 link 上去，但係唔知點解佢冇新增落去
+      //            嗰個已收藏景點度」
+      //
+      //   ⚠️ 根因：原本寫 `try { await addItem(...); saved++ } catch {}`
+      //      —— **錯誤被靜靜食咗**，然後照樣 toast「已加入 0 個收藏 ✓」，
+      //      個 ✓ 令用戶以為成功。加上後端嗰時冇去重，
+      //      用戶見唔到就再撳 → 加咗兩次。
+      //
+      //   ✅ 而家：
+      //      · 收集真錯誤，唔再 `catch {}`
+      //      · 分辨「新增」／「已經喺收藏度」（後端回 duplicate）
+      //      · 0 個成功 → **紅色警告**，唔係 ✓
+      const res = await saveAll(found)
       setUrl(''); setText('')
       await onRefresh()
     } catch (e) {
@@ -105,11 +148,8 @@ export default function Discover({ tripId, items, onRefresh, onOpenMap, onEditIt
     try {
       const r = await api.parse({ url: needCaption?.url, text: captionText.trim() })
       const found = r.items || []
-      let saved = 0
-      for (const it of found) {
-        try { await api.addItem(tripId, it); saved++ } catch {}
-      }
-      toast(`已加入 ${saved} 個收藏 ✓`)
+      // ⚠️ 同上面一樣 —— 用 saveAll()，唔好 `catch {}` 食咗錯誤
+      await saveAll(found)
       setNeedCaption(null); setUrl(''); setText('')
       setSteps([])
       await onRefresh()
