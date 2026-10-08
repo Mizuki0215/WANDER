@@ -580,3 +580,67 @@ class TestHostingOptions:
         s = (ROOT / "deploy.sh").read_text(encoding="utf-8")
         assert "volumes create" in s, "deploy.sh 冇建 volume"
         assert "清空" in s, "冇警告唔建 volume 會清空"
+
+
+class TestCustomLinkName:
+    """
+    ⚠️ 用戶問：「link 名可以改嗎？」
+
+       答：
+         · cloudflared **quick** tunnel → **改唔到**（隨機派）
+         · ngrok 免費版 → ✅ 有 1 個 static domain
+         · Fly.io → 你揀嘅 app 名
+         · 買網域 → 最靚
+    """
+
+    def test_doc_explains_quick_tunnel_immutable(self):
+        s = (ROOT / "HOSTING.md").read_text(encoding="utf-8")
+        assert "改唔到" in s, "冇講 quick tunnel 改唔到名"
+        assert "隨機" in s, "冇解釋係隨機派"
+
+    def test_doc_lists_custom_name_ways(self):
+        """
+        ⚠️⚠️ **只有兩條路**可以自訂名：
+             · Fly.io（你揀 app 名）
+             · 買網域 + named tunnel
+           ⚠️ ngrok 免費版**唔得**（實測 ERR_NGROK_313）
+        """
+        s = (ROOT / "HOSTING.md").read_text(encoding="utf-8")
+        for k in ["fly.dev", "cloudflared tunnel create"]:
+            assert k in s, f"冇提「{k}」"
+
+    def test_doc_says_ngrok_cannot_customise(self):
+        """
+        ⚠️⚠️ 我原本以為 ngrok 免費版可以自訂 —— **實測錯咗**。
+           要老實記錄（唔可以留低錯嘅資訊）。
+        """
+        s = (ROOT / "HOSTING.md").read_text(encoding="utf-8")
+        assert "ERR_NGROK_313" in s, "冇記錄 ERR_NGROK_313"
+        assert "Only paid plans" in s, "冇引用 ngrok 嘅原文"
+
+    def test_host_script_handles_313(self):
+        s = (ROOT / "host.sh").read_text(encoding="utf-8")
+        assert "ERR_NGROK_313" in s, "host.sh 冇處理 ERR_NGROK_313"
+        assert "免費版唔可以自訂" in s, "冇講清楚免費版唔得"
+
+    def test_host_script_supports_custom_ngrok_domain(self):
+        s = (ROOT / "host.sh").read_text(encoding="utf-8")
+        assert "WANDER_NGROK_DOMAIN" in s, "host.sh 唔支援自訂 ngrok domain"
+        # ⚠️ ngrok 新版用 `--url`（唔係 `--domain`）
+        assert '--url "https://$NGROK_DOMAIN"' in s or \
+               '--url "https://${NGROK_DOMAIN}"' in s, \
+            "ngrok 冇用 --url（新版語法）"
+
+    def test_host_script_says_no_domain_uses_random(self):
+        s = (ROOT / "host.sh").read_text(encoding="utf-8")
+        assert "用隨機名" in s, "冇講冇設 domain 會用隨機名"
+        assert "dashboard.ngrok.com/domains" in s, "冇畀攞 domain 嘅網址"
+
+    def test_fly_app_name_is_custom(self):
+        """⚠️ Fly.io 個 app 名就係 URL 嘅前半。"""
+        import re
+        s = (ROOT / "fly.toml").read_text(encoding="utf-8")
+        app = re.search(r'^app = "(.+)"', s, re.M).group(1)
+        assert app != "wander-CHANGE-ME", "fly.toml 仲係預設名"
+        assert re.fullmatch(r"[a-z0-9][a-z0-9-]{1,28}[a-z0-9]", app), \
+            f"app 名格式唔啱: {app}"

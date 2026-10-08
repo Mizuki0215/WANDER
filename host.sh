@@ -14,6 +14,9 @@
 #     ./host.sh                  # cloudflared（推薦，唔使註冊）
 #     ./host.sh --cloudflared    # 同上
 #     ./host.sh --ngrok          # ngrok（⚠️ 免費版唔穩定）
+#     WANDER_NGROK_DOMAIN=你個名.ngrok-free.app ./host.sh --ngrok
+#                                # ⚠️⚠️ 但 ngrok **免費版唔准自訂**
+#                                #    （ERR_NGROK_313）→ 只有付費版得
 #     ./host.sh --open           # 唔問安全選項（⚠️ 唔建議）
 #
 # ⚠️ 為咩預設 cloudflared：
@@ -124,7 +127,26 @@ if [ "$BACKEND" = "ngrok" ]; then
   if ! command -v ngrok >/dev/null 2>&1; then
     echo "  ✗ 冇 ngrok"; exit 1
   fi
-  ngrok http "$PORT" --log=stdout >"$LOG" 2>&1 &
+  # ⚠️⚠️ 用戶問：「link 名可以改嗎？」
+  #
+  #   · cloudflared quick tunnel → **改唔到**（cloudflare 隨機派）
+  #   · ngrok 免費版 → ⚠️⚠️ **唔可以自訂**（ERR_NGROK_313 實測）
+  #       免費版只有一個**隨機** static domain，名唔可以揀
+  #       ⚠️ 但 ngrok 免費版會出警告頁 + 有時 ERR_NGROK_802
+  #   · Fly.io → `你個名.fly.dev`（要綁卡）
+  #   · 買網域 → `wander.你個名.com`（最靚，~$1-10/年）
+  #
+  # ⚠️ 用 `--url` 而唔係 `--domain`（新版語法）
+  NGROK_DOMAIN="${WANDER_NGROK_DOMAIN:-}"
+  if [ -n "$NGROK_DOMAIN" ]; then
+    echo "  用自訂 domain：$NGROK_DOMAIN"
+    ngrok http "$PORT" --url "https://$NGROK_DOMAIN" --log=stdout >"$LOG" 2>&1 &
+  else
+    echo "  ⚠️ 冇設 WANDER_NGROK_DOMAIN → 用隨機名"
+    echo "     想自訂：去 https://dashboard.ngrok.com/domains 攞個免費 domain，然後"
+    echo "             WANDER_NGROK_DOMAIN=你個名.ngrok-free.app ./host.sh --ngrok"
+    ngrok http "$PORT" --log=stdout >"$LOG" 2>&1 &
+  fi
   CF_PID=$!
   trap 'kill $CF_PID 2>/dev/null || true' EXIT
   for _ in $(seq 1 40); do
@@ -136,11 +158,27 @@ if [ "$BACKEND" = "ngrok" ]; then
   done
   if grep -q "ERR_NGROK" "$LOG" 2>/dev/null; then
     echo "  ✗ ngrok 失敗："
-    grep -E "ERR_NGROK|ERROR" "$LOG" | head -3 | sed 's/^/      /'
+    grep -oE "ERR_NGROK_[0-9]+" "$LOG" | head -1 | sed 's/^/      /'
     echo
-    echo "  ⚠️ ngrok 免費版有 agent 限制（ERR_NGROK_802）"
-    echo "     改用 cloudflared（唔使註冊、唔使 authtoken）："
-    echo "         ./host.sh --cloudflared"
+    if grep -q "ERR_NGROK_313" "$LOG" 2>/dev/null; then
+      # ⚠️⚠️ 實測發現：ngrok **免費版唔准自訂 subdomain**
+      echo "  ⚠️⚠️ ngrok **免費版唔可以自訂 link 名**："
+      echo "        “Only paid plans may create endpoints with custom subdomains”"
+      echo
+      echo "     ⚠️ 免費版只可以攞一個**隨機** static domain"
+      echo "        （隨機名，唔可以揀）"
+      echo
+      echo "  ✅ 想要**自訂名**嘅話："
+      echo "     · Fly.io        → 你揀 app 名：./deploy.sh（要綁卡）"
+      echo "     · 買網域        → wander.你個名.com（~US$1-10/年）"
+      echo
+      echo "  ⚠️ 只想即刻有 link → 用 cloudflared（隨機名，但免費穩定）："
+      echo "         ./host.sh --cloudflared"
+    else
+      echo "  ⚠️ ngrok 免費版有 agent 限制（ERR_NGROK_802，間歇性）"
+      echo "     改用 cloudflared（唔使註冊、唔使 authtoken）："
+      echo "         ./host.sh --cloudflared"
+    fi
     exit 1
   fi
 else

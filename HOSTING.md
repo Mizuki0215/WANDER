@@ -5,6 +5,54 @@
 
 ---
 
+## ❓「Link 名可以改嗎？」
+
+### ⚠️ cloudflared **quick** tunnel → **改唔到**
+
+```
+known-ideal-arizona-highlight.trycloudflare.com
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+cloudflare 隨機派，冇任何參數可以指定
+```
+
+### ✅ 想要自訂名 → **只有兩條路**
+
+| 方法 | 你會拿到 | 成本 | 可以自訂？ |
+|---|---|---|---|
+| **Fly.io** | `你揀嘅名.fly.dev` | 要綁卡（唔收錢）| ✅ **你揀** |
+| **買網域 + named tunnel** | `wander.你個名.com` | ~US$1-10/**年** | ✅ **你揀** |
+
+### ❌ 實測：呢啲**都改唔到名**
+
+| 方法 | 為咩 |
+|---|---|
+| **cloudflared quick** | cloudflare 隨機派，冇參數可以指定 |
+| **ngrok 免費版** | ⚠️⚠️ 實測 `ERR_NGROK_313`：<br>`Only paid plans may create endpoints with custom subdomains`<br>→ 免費版只有一個**隨機** static domain |
+
+⚠️⚠️ **我原本以為 ngrok 免費版可以自訂，實測錯咗** ——
+   佢連 static domain 個名都係自動生成，唔可以揀。
+   （要付費 plan 先可以自訂 subdomain。）
+
+#### ① Fly.io（最實際，要綁卡）
+
+```bash
+./deploy.sh        # app 名 = wander-mizuki → https://wander-mizuki.fly.dev
+```
+⚠️ app 名要**全球唯一**，但你可以揀（改 `fly.toml` 第一行）
+
+#### ② 買網域（最靚，永久）
+
+```bash
+cloudflared tunnel login
+cloudflared tunnel create wander
+cloudflared tunnel route dns wander wander.你個名.com
+cloudflared tunnel run --url http://localhost:8787 wander
+```
+→ `https://wander.你個名.com`
+⚠️ 你只需要**網域**（唔使 VPS）—— 部機行住就有
+
+---
+
 ## 🎯 你而家已經有嘅
 
 ```
