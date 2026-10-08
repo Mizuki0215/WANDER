@@ -338,3 +338,89 @@ class TestNavHeightMeasured:
         i = css.index(".screen {")
         blk = css[i:css.index("}", i) + 1]
         assert "var(--nav-h)" in blk, ".screen padding 冇用 var(--nav-h)"
+
+
+# ══════════════════════════════════════════════════════════════
+# ⑤ 朋友請求：收件者撳唔到接受？
+# ══════════════════════════════════════════════════════════════
+
+class TestFriendRequestUx:
+    """
+    ⚠️⚠️ 用戶報：
+       「我用另一個帳號加朋友，然後我登入返另一個帳號呢
+        都係show緊待確認囉，被邀請嗰個人冇得撳接受呢個掣。」
+
+    ⚠️ 實測 **API 完全正常**：
+       · 收件者 `/api/friends` 真係有 `incoming` + `request_id`
+       · 撳 accept → 兩邊都成為朋友
+       → 用戶當時睇到嘅「等對方確認」係**發出方** section，
+         即係 login 咗做發送者，唔係收件者。
+
+    ✅ 修法（令佢唔可能再撈亂）：
+       ① 頂部明確顯示「你而家登入緊 @邊個」
+       ② 收到嘅請求用 neon 大字提示
+       ③ incoming / outgoing section 標題清楚分開
+       ④ 切返 app 自動重新載入（stale state）
+    """
+
+    @pytest.fixture(scope="class")
+    def fr(self):
+        return code(WEB / "components" / "Friends.jsx")
+
+    def test_shows_who_you_are(self, fr):
+        """
+        ⚠️⚠️ 最重要嘅修法 —— 用戶要即刻知自己 login 咗做邊個。
+        """
+        assert "你而家登入緊" in fr, "冇顯示「你而家登入緊邊個」"
+        # ⚠️ 要顯示 @username（用戶用 @名加朋友，唔係 email）
+        assert "me.username" in fr, "冇顯示 @帳號名"
+
+    def test_loud_incoming_banner(self, fr):
+        """⚠️ 收到嘅請求要**大聲** —— 唔可以同「發出嘅」睇落一樣。"""
+        assert "想加你做朋友" in fr, "冇大聲嘅 incoming 提示"
+        assert "要你撳「接受」" in fr, "冇講要撳接受"
+
+    def test_sections_clearly_labelled(self, fr):
+        """⚠️ 兩個 section 標題要一眼分得出。"""
+        assert "📥 收到嘅請求" in fr, "incoming section 標題唔清楚"
+        assert "📤 你發出嘅" in fr, "outgoing section 標題唔清楚"
+        # ⚠️ 唔可以再用「等對方確認」做 section 標題
+        assert '<div className="sec">等對方確認' not in fr, \
+            "仲用「等對方確認」做 section 標題（用戶就係咁撈亂）"
+
+    def test_outgoing_says_waiting_for_them(self, fr):
+        """⚠️ outgoing 要講「等**佢**撳」，唔係「待確認」。"""
+        assert "等佢撳" in fr, "outgoing 冇講「等佢撳」"
+        assert "等對方撳接受" in fr, "outgoing section 冇講等對方"
+
+    def test_accept_button_exists(self, fr):
+        """⚠️ 收件者一定要有「接受」掣。"""
+        assert "acceptFriend" in fr, "冇 acceptFriend"
+        assert ">接受</button>" in fr or "接受</button>" in fr, "冇「接受」掣"
+        assert ">拒絕</button>" in fr or "拒絕</button>" in fr, "冇「拒絕」掣"
+
+    def test_manual_refresh_button(self, fr):
+        """⚠️ 要有一個手動重新載入掣（用戶可以自己 refresh）。"""
+        assert "onClick={load}" in fr, "冇手動重新載入掣"
+        assert 'title="重新載入朋友同請求"' in fr, "冇 tooltip"
+
+    def test_refetches_on_wake(self, fr):
+        """
+        ⚠️⚠️ PWA 由背景切返嚟要自動 reload ——
+           唔係嘅話會顯示 stale data（另一個帳號撳咗接受都唔知）。
+        """
+        assert "visibilitychange" in fr, "冇監聽 visibilitychange"
+        assert "'focus'" in fr or '"focus"' in fr, "冇監聽 focus"
+        assert "removeEventListener" in fr, "冇清 event listener"
+
+    def test_backend_has_request_id(self):
+        """
+        ⚠️ 後端 `/api/friends` 一定要回 `request_id` ——
+           冇嘅話前端撳接受唔知撳邊個。
+           （⚠️ 舊 bug：`id` 同時係請求 id 同用戶 id → 前端攞錯。）
+        """
+        srv = (ROOT / "server" / "app" / "main.py").read_text(encoding="utf-8")
+        i = srv.index("def list_friends(")
+        blk = srv[i:i + 1800]
+        assert "AS request_id" in blk, "冇 request_id"
+        assert "AS user_id" in blk, "冇 user_id（會同 id 撞）"

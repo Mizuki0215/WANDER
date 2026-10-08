@@ -9,7 +9,7 @@
 
 # ⚠️ 一定要全球唯一（Fly.io 會檢查）
 # 想改：改呢行，或者跑 ./deploy.sh 佢會問你
-app = "wander-mizuki"
+app = "wander-app"
 primary_region = "hkg"          # ⚠️ 香港最近
 
 [build]

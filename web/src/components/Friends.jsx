@@ -37,6 +37,30 @@ export default function Friends({ trip, me, onRefresh, onTripsChanged, prefill, 
 
   useEffect(() => { load() }, [load])
 
+  /**
+   * ⚠️⚠️ 切返嚟就自動重新載入。
+   *
+   *   為咩：用戶報「登入咗另一個帳號都係 show 待確認」——
+   *   ⚠️ 其中一個可能係 **stale state**：
+   *      · PWA 由背景切返嚟（手機成日咁做）
+   *      · 另一個帳號喺另一個 tab / 裝置撳咗接受
+   *      · 服務員（service worker）快取咗舊頁
+   *
+   *   ✅ 監聽 `visibilitychange` + `focus` → 返嚟就 reload。
+   *   ⚠️ 唔用 interval 輪詢 —— 晒電，而且 PWA 背景會停。
+   */
+  useEffect(() => {
+    const onWake = () => {
+      if (document.visibilityState === 'visible') load()
+    }
+    document.addEventListener('visibilitychange', onWake)
+    window.addEventListener('focus', onWake)
+    return () => {
+      document.removeEventListener('visibilitychange', onWake)
+      window.removeEventListener('focus', onWake)
+    }
+  }, [load])
+
   // 由 QR 連結嚟嘅 @名 → 自動查 + 預填
   useEffect(() => {
     if (!prefill) return
@@ -184,7 +208,61 @@ export default function Friends({ trip, me, onRefresh, onTripsChanged, prefill, 
   return (
     <div className="screen">
       <div className="h1">朋友</div>
-      <div className="sub">加朋友要對方確認；邀請入旅程都一樣</div>
+
+      {/* ⚠️⚠️ 用戶報嘅混淆：
+            「我用另一個帳號加朋友，然後我登入返另一個帳號呢
+             都係show緊待確認，被邀請嗰個人冇得撳接受掣。」
+
+            ⚠️ 實測 API **完全正常** —— 收件者真係有 incoming +
+               request_id，撳得接受。用戶當時睇到嘅「等對方確認」
+               係**發出方**嘅 section → 即係 login 咗做發送者。
+
+            ✅ 修法：頂部**明確顯示你而家係邊個**，
+               再加一個**大聲嘅 incoming 提示** → 冇可能撈亂。 */}
+      {me && (
+        <div className="card" style={{
+          marginTop: 10, padding: '9px 12px',
+          display: 'flex', alignItems: 'center', gap: 9,
+          background: 'var(--surface-2)',
+        }}>
+          <Avatar id={me.avatar} size={30} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div className="sub" style={{ fontSize: 10 }}>你而家登入緊</div>
+            <div style={{ fontWeight: 800, fontSize: 13, marginTop: 1 }}>
+              {me.display_name || me.email}
+              {me.username && (
+                <span className="mono sub"
+                  style={{ fontSize: 10.5, fontWeight: 400, marginLeft: 5 }}>
+                  @{me.username}
+                </span>
+              )}
+            </div>
+          </div>
+          <button className="btn sm ghost" onClick={load}
+            disabled={loading} title="重新載入朋友同請求">
+            {loading ? '…' : '↻'}
+          </button>
+        </div>
+      )}
+
+      {/* ⚠️ 收到嘅請求要大聲 —— 唔可以同「發出嘅」睇落一樣 */}
+      {data.incoming.length > 0 && (
+        <div className="card" style={{
+          marginTop: 10, borderColor: 'var(--neon)', borderWidth: 2,
+          background: 'color-mix(in srgb, var(--neon) 12%, transparent)',
+        }}>
+          <div style={{ fontWeight: 900, fontSize: 14 }}>
+            📥 有 {data.incoming.length} 個人想加你做朋友
+          </div>
+          <div className="sub" style={{ fontSize: 11, marginTop: 4 }}>
+            ⚠️ 要你撳「接受」先成為朋友（下面有掣）
+          </div>
+        </div>
+      )}
+
+      <div className="sub" style={{ marginTop: 8 }}>
+        加朋友要對方確認；邀請入旅程都一樣
+      </div>
 
       {trip && (
         <div className="card glow" style={{ marginTop: 12 }}>
@@ -225,10 +303,12 @@ export default function Friends({ trip, me, onRefresh, onTripsChanged, prefill, 
         </>
       )}
 
-      {/* ═══ 待確認好友請求 ═══ */}
+      {/* ═══ 📥 收到嘅好友請求（要你撳接受） ═══ */}
       {data.incoming.length > 0 && (
         <>
-          <div className="sec">好友請求 · {data.incoming.length}</div>
+          <div className="sec" style={{ color: 'var(--neon)' }}>
+            📥 收到嘅請求 · {data.incoming.length}（要你撳接受）
+          </div>
           {data.incoming.map(r => (
             <div key={r.request_id} className="card"
               style={{ marginBottom: 8, borderColor: 'var(--neon)' }}>
@@ -322,7 +402,9 @@ export default function Friends({ trip, me, onRefresh, onTripsChanged, prefill, 
       {/* ═══ 已送出 ═══ */}
       {data.outgoing.length > 0 && (
         <>
-          <div className="sec">等對方確認 · {data.outgoing.length}</div>
+          <div className="sec">
+            📤 你發出嘅 · {data.outgoing.length}（等對方撳接受）
+          </div>
           {data.outgoing.map(r => (
             <div key={r.request_id} className="item" style={{ alignItems: 'center' }}>
               <Avatar id={r.avatar} size={38} />
@@ -331,7 +413,7 @@ export default function Friends({ trip, me, onRefresh, onTripsChanged, prefill, 
                 <p>{r.email}</p>
               </div>
               <span className="chip" style={{ color: 'var(--warn)', borderColor: 'var(--warn)' }}>
-                待確認
+                ⏳ 等佢撳
               </span>
             </div>
           ))}
