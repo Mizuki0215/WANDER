@@ -19,14 +19,14 @@
 #
 # 需要：
 #     · GitHub account：Mizuki0215
-#     · repo 名：yeetung-work
+#     · repo 名：Wander
 #     · 一個 Personal Access Token（classic，要 `repo` scope）
 #         https://github.com/settings/tokens/new?scopes=repo
 
 set -euo pipefail
 
 OWNER="${GITHUB_OWNER:-Mizuki0215}"
-REPO="${GITHUB_REPO:-yeetung-work}"
+REPO="${GITHUB_REPO:-Wander}"
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 

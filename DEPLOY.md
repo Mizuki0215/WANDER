@@ -238,7 +238,7 @@ https://github.com/settings/tokens
 ```bash
 brew install gh
 gh auth login
-gh repo create yeetung-work --private --source=. --push
+gh repo create Wander --private --source=. --push
 ```
 
 ---
