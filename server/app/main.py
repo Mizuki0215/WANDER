@@ -2771,6 +2771,78 @@ def admin_me(user: dict = Depends(current_user)) -> dict:
 # 後台：數據管理（用戶要求「我想有個後台去管理數據」）
 # ══════════════════════════════════════════════════════════════
 
+@app.get("/api/admin/active-users")
+def admin_active_users(days: int = 30, limit: int = 40,
+                       user: dict = Depends(admin_user)) -> dict:
+    """
+    「邊個用戶用緊」—— 活躍用戶清單。
+    ⚠️⚠️ 用戶要求：
+       「我淨係想整嘅係有幾多數據？有啲咩用戶用緊咁樣我哋嘅 Dashboard。」
+
+    ⚠️ 按**最後活動時間**排序（唔係註冊時間）——
+       咁先睇到「邊個真係用緊」而唔係「邊個註冊過」。
+
+    ⚠️ 回：
+       · last_seen  —— 最後活動時間
+       · events     —— 期內事件數
+       · sessions   —— 仲有效嘅 session 數（≈ 幾部裝置）
+       · 用戶自己做咗幾多嘢（旅程／景點／購物）
+    """
+    limit = max(1, min(200, limit))
+    since = _iso(_now() - timedelta(days=max(1, min(365, days))))
+    with db.connect() as conn:
+        rows = conn.execute("""
+            SELECT u.id, u.email, u.username, u.display_name, u.avatar,
+                   u.is_admin, u.onboarded, u.created_at,
+                   (SELECT MAX(created_at) FROM events e WHERE e.user_id = u.id) AS last_seen,
+                   (SELECT COUNT(*) FROM events e
+                     WHERE e.user_id = u.id AND e.created_at >= ?) AS events,
+                   (SELECT COUNT(*) FROM sessions s
+                     WHERE s.user_id = u.id
+                       AND (s.expires_at IS NULL OR s.expires_at > ?)) AS sessions,
+                   (SELECT COUNT(*) FROM members m WHERE m.user_id = u.id) AS trips,
+                   (SELECT COUNT(*) FROM items i WHERE i.created_by = u.id) AS items_made,
+                   (SELECT COUNT(*) FROM shopping_items sh
+                     WHERE sh.created_by = u.id) AS shopping_made,
+                   (SELECT COUNT(*) FROM expenses ex
+                     WHERE ex.created_by = u.id) AS expenses_made
+            FROM users u
+            ORDER BY last_seen DESC NULLS LAST, u.created_at DESC
+            LIMIT ?""", (since, _iso(_now()), limit)).fetchall()
+
+        # ⚠️ 「有幾多數據」—— 一眼睇晒
+        def n(sql, *a):
+            try:
+                return conn.execute(sql, a).fetchone()[0]
+            except Exception:
+                return 0
+
+        counts = {
+            "users": n("SELECT COUNT(*) FROM users"),
+            "users_active": n("SELECT COUNT(DISTINCT user_id) FROM events "
+                              "WHERE created_at >= ?", since),
+            "sessions_live": n("SELECT COUNT(*) FROM sessions "
+                               "WHERE expires_at IS NULL OR expires_at > ?",
+                               _iso(_now())),
+            "trips": n("SELECT COUNT(*) FROM trips"),
+            "stops": n("SELECT COUNT(*) FROM trip_stops"),
+            "items": n("SELECT COUNT(*) FROM items"),
+            "shopping": n("SELECT COUNT(*) FROM shopping_items"),
+            "expenses": n("SELECT COUNT(*) FROM expenses"),
+            "friends": n("SELECT COUNT(*) FROM friends"),
+            "events": n("SELECT COUNT(*) FROM events"),
+            "events_period": n("SELECT COUNT(*) FROM events WHERE created_at >= ?",
+                               since),
+        }
+        # ⚠️ 幾多 % 嘅數據有真內容
+        counts["empty_trips"] = n(
+            """SELECT COUNT(*) FROM trips t
+               WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.trip_id = t.id)""")
+
+    return {"days": days, "counts": counts,
+            "users": db.rows_to_list(rows)}
+
+
 @app.get("/api/admin/users")
 def admin_users(q: str = "", limit: int = 50, offset: int = 0,
                 user: dict = Depends(admin_user)) -> dict:
@@ -2828,106 +2900,6 @@ def admin_trips(q: str = "", limit: int = 50, offset: int = 0,
             (*vals, limit, offset)).fetchall()
     return {"total": total, "limit": limit, "offset": offset,
             "trips": db.rows_to_list(rows)}
-
-
-class AdminDeleteBody(BaseModel):
-    confirm: str = ""
-
-
-@app.delete("/api/admin/users/{user_id}")
-def admin_delete_user(user_id: str, confirm: str = "",
-                      user: dict = Depends(admin_user)) -> dict:
-    """
-    刪除用戶（⚠️ 破壞性）。
-
-    ⚠️⚠️ 兩個保護：
-       ① 一定要打 `confirm=<email>`（唔可以淨係撳一下就冇咗）
-       ② **唔可以刪自己**（會將自己鎖出後台）
-    ⚠️ 同 `tools/manage_account.py` 一樣：
-       先**轉移**旅程擁有權，再刪佢冇其他成員嘅旅程。
-    """
-    with db.connect() as conn:
-        row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "搵唔到呢個用戶")
-        target = dict(row)
-        if target["id"] == user["id"]:
-            raise HTTPException(400, "唔可以刪自己")
-        if (confirm or "").strip() != target["email"]:
-            raise HTTPException(400, f"要打「{target['email']}」確認")
-
-        # ① 轉移旅程擁有權（畀最早加入嘅其他成員）
-        for t in conn.execute("SELECT id FROM trips WHERE owner_id=?",
-                              (user_id,)).fetchall():
-            nxt = conn.execute(
-                """SELECT user_id FROM members WHERE trip_id=? AND user_id<>?
-                   ORDER BY rowid LIMIT 1""", (t["id"], user_id)).fetchone()
-            if nxt:
-                conn.execute("UPDATE trips SET owner_id=? WHERE id=?",
-                             (nxt["user_id"], t["id"]))
-        # ② 轉移 item 作者
-        for t in conn.execute("SELECT id FROM trips WHERE owner_id=?",
-                              (user_id,)).fetchall():
-            pass
-        conn.execute(
-            """UPDATE items SET created_by = (
-                   SELECT user_id FROM members
-                   WHERE trip_id = items.trip_id AND user_id <> ?
-                   ORDER BY rowid LIMIT 1)
-               WHERE created_by = ?""", (user_id, user_id))
-        # ③ 刪佢冇其他成員嘅旅程（連內容）
-        keep = [r["id"] for r in conn.execute(
-            """SELECT t.id FROM trips t
-               WHERE t.owner_id=?
-                 AND EXISTS (SELECT 1 FROM members m
-                             WHERE m.trip_id=t.id AND m.user_id<>?)""",
-            (user_id, user_id)).fetchall()]
-        if keep:
-            ph = ",".join("?" * len(keep))
-            for tbl in ("items", "trip_stops", "shopping_items", "expenses",
-                        "votes"):
-                try:
-                    conn.execute(f"DELETE FROM {tbl} WHERE trip_id NOT IN ({ph}) "
-                                 f"AND trip_id IN (SELECT id FROM trips WHERE owner_id=?)",
-                                 (*keep, user_id))
-                except Exception:
-                    pass
-        conn.execute(
-            """DELETE FROM trips WHERE owner_id=? AND id NOT IN
-               (SELECT trip_id FROM members WHERE user_id<>?)""",
-            (user_id, user_id))
-        # ④ 清其他關聯
-        for sql in (
-            "DELETE FROM members WHERE user_id=?",
-            "DELETE FROM friends WHERE user_id=? OR friend_id=?",
-            "DELETE FROM friend_requests WHERE from_id=? OR to_id=?",
-            "DELETE FROM sessions WHERE user_id=?",
-            "DELETE FROM events WHERE user_id=?",
-            "DELETE FROM items WHERE created_by=?",
-        ):
-            try:
-                n = sql.count("?")
-                conn.execute(sql, tuple([user_id] * n))
-            except Exception:
-                pass
-        # ⑤ 最後先刪用戶
-        conn.execute("DELETE FROM users WHERE id=?", (user_id,))
-    return {"ok": True, "deleted": target["email"]}
-
-
-@app.delete("/api/admin/trips/{trip_id}")
-def admin_delete_trip(trip_id: str, confirm: str = "",
-                      user: dict = Depends(admin_user)) -> dict:
-    """刪除旅程（⚠️ 破壞性，要打旅程名確認）。"""
-    with db.connect() as conn:
-        row = conn.execute("SELECT * FROM trips WHERE id=?", (trip_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "搵唔到呢個旅程")
-        t = dict(row)
-        if (confirm or "").strip() != (t.get("name") or ""):
-            raise HTTPException(400, f"要打「{t.get('name')}」確認")
-        conn.execute("DELETE FROM trips WHERE id=?", (trip_id,))
-    return {"ok": True, "deleted": t.get("name")}
 
 
 @app.get("/api/admin/export")

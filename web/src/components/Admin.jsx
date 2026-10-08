@@ -215,6 +215,8 @@ export default function Admin({ onBack }) {
       {/*   ⚠️⚠️ 用戶問：「未設定 SMTP 你係諗住點搞？」
               答：冇 SMTP 就寄唔到驗證碼 → 用邀請碼。
               呢個就係產生邀請碼嘅地方。 */}
+      <Dashboard />
+
       <DataManager />
 
       <MailTest />
@@ -410,25 +412,156 @@ function MailTest() {
 }
 
 /**
- * 🗄️ 數據管理（用戶要求）
- * ========================
+ * 🗄️ 數據清單（唯讀）
+ * =====================
  *
- * ⚠️⚠️ 用戶原話：
- *   「同埋我想有個後台去管理數據喎，你幾時整呀？」
+ * ⚠️⚠️ 用戶澄清：
+ *   「我淨係想整嘅係有幾多數據？有啲咩用戶用緊咁樣我哋嘅 Dashboard。」
  *
- * ⚠️ 設計原則：
- *   ① **搜尋先** —— 119 個用戶／78 個旅程唔可以一次過列出嚟
- *   ② ⚠️⚠️ **刪除要打名確認** —— 唔可以撳一下就近冇
- *      （我今日已經試過兩次誤刪用戶資料）
- *   ③ ⚠️ **唔可以刪自己** —— 會將自己鎖出後台
- *   ④ 匯出**唔包** `password_hash`
+ *   → **唔需要**刪除功能。我原本整咗「刪用戶／刪旅程」，
+ *     而家**全部刪走**。
+ *
+ *   ⚠️ 為咩咁做係好嘅：
+ *      · 少一個**誤刪**風險（今日已經試過兩次）
+ *      · Admin dashboard 應該係**唯讀** —— 睇數據，唔係改數據
+ *      · 真係要刪嘅話用 `server/tools/manage_account.py`
+ *        （有完整嘅擁有權轉移邏輯 + 要打 email 確認）
+ *
+ * ✅ 保留：搜尋、清單、匯出（全部唯讀）
  */
+/**
+ * 📊 Dashboard
+ * ==============
+ *
+ * ⚠️⚠️ 用戶要求：
+ *   「我淨係想整嘅係有幾多數據？有啲咩用戶用緊咁樣我哋嘅 Dashboard。」
+ *
+ * ⚠️ 呢頁係**唯讀**：
+ *   · 上面：**有幾多數據**（用戶／旅程／景點／購物／開支／事件）
+ *   · 下面：**邊個用戶用緊**（按最後活動排序）
+ *
+ * ⚠️ 我原本整咗「刪除用戶／旅程」—— 用戶話唔需要，所以**刪走**咗
+ *    （少一個誤刪風險；真係要刪用 tools/manage_account.py）。
+ */
+
+/** ⚠️ 相對時間（「3 分鐘前」）—— 一眼睇到邊個仲用緊。 */
+function ago(iso) {
+  if (!iso) return '冇活動'
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return '—'
+  const s = Math.max(0, (Date.now() - t) / 1000)
+  if (s < 60) return '啱啱'
+  if (s < 3600) return `${Math.floor(s / 60)} 分鐘前`
+  if (s < 86400) return `${Math.floor(s / 3600)} 個鐘前`
+  if (s < 86400 * 30) return `${Math.floor(s / 86400)} 日前`
+  return iso.slice(0, 10)
+}
+
+function Dashboard() {
+  const [days, setDays] = useState(30)
+  const [d, setD] = useState(null)
+  const [busy, setBusy] = useState(true)
+
+  useEffect(() => {
+    setBusy(true)
+    api.adminActiveUsers(days, 60).then(setD).catch(() => {})
+      .finally(() => setBusy(false))
+  }, [days])
+
+  const c = d?.counts || {}
+  const CARDS = [
+    ['👥 用戶', c.users, `${c.users_active ?? 0} 個期內活躍`],
+    ['🗂 旅程', c.trips, `${c.empty_trips ?? 0} 個未有景點`],
+    ['🏙 城市', c.stops, '旅程入面嘅城市'],
+    ['📍 景點', c.items, '收藏嘅地方'],
+    ['🛒 購物', c.shopping, '購物清單項'],
+    ['💸 開支', c.expenses, '分帳記錄'],
+    ['👫 朋友', c.friends, '朋友關係'],
+    ['⚡ 活動', c.events_period, `總共 ${c.events ?? 0} 條`],
+  ]
+
+  return (
+    <>
+      <Sec title="📊 有幾多數據" hint={busy ? '載入緊…' : `最近 ${days} 日`}>
+        <div className="chips" style={{ marginBottom: 10 }}>
+          {[7, 30, 90, 365].map(n => (
+            <button key={n} className={`chip ${days === n ? 'on' : ''}`}
+              style={{ fontSize: 10.5 }} onClick={() => setDays(n)}>
+              {n === 365 ? '一年' : `${n} 日`}
+            </button>
+          ))}
+        </div>
+
+        {/* ⚠️ percentage grid（唔寫死欄數）—— 手機 2 欄、平板 4 欄 */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(31%, 1fr))',
+          gap: 8,
+        }}>
+          {CARDS.map(([label, val, hint]) => (
+            <div key={label} className="card" style={{
+              padding: '11px 12px', marginBottom: 0,
+              background: 'var(--surface-2)',
+            }}>
+              <div className="sub" style={{ fontSize: 10 }}>{label}</div>
+              <div className="mono" style={{
+                fontSize: 22, fontWeight: 900, lineHeight: 1.15, marginTop: 3,
+                color: 'var(--cyan)',
+              }}>
+                {val == null ? '—' : Number(val).toLocaleString()}
+              </div>
+              <div className="sub" style={{ fontSize: 9, marginTop: 2 }}>{hint}</div>
+            </div>
+          ))}
+        </div>
+      </Sec>
+
+      <Sec title="👥 邊個用戶用緊" hint={`${d?.users?.length ?? 0} 個`}>
+        <div className="sub" style={{ fontSize: 10.5, marginBottom: 8, lineHeight: 1.8 }}>
+          ⚠️ 按**最後活動**排序 —— 唔係註冊時間（咁先睇到邊個真係用緊）
+        </div>
+        {(d?.users || []).map(u => {
+          const t = u.last_seen ? Date.parse(u.last_seen) : 0
+          const hrs = t ? (Date.now() - t) / 3600000 : 1e9
+          const color = hrs < 1 ? 'var(--good)'
+            : hrs < 24 ? 'var(--cyan)'
+            : hrs < 24 * 7 ? 'var(--text)' : 'var(--dim)'
+          return (
+            <div key={u.id} className="item" style={{ alignItems: 'center' }}>
+              <div className="ic">{u.avatar || '🙂'}</div>
+              <div className="info">
+                <h4 style={{ color }}>
+                  {u.display_name || u.email}
+                  {u.is_admin ? <span className="chip"
+                    style={{ fontSize: 9, marginLeft: 5 }}>admin</span> : null}
+                </h4>
+                <p className="mono" style={{ fontSize: 10 }}>
+                  {u.email}{u.username ? ` · @${u.username}` : ''}
+                </p>
+                <p style={{ fontSize: 10 }}>
+                  <b style={{ color }}>{ago(u.last_seen)}</b>
+                  {' · '}⚡{u.events ?? 0}
+                  {' · '}🗂{u.trips ?? 0}
+                  {' · '}📍{u.items_made ?? 0}
+                  {u.sessions > 1 ? ` · 📱${u.sessions}` : ''}
+                </p>
+              </div>
+            </div>
+          )
+        })}
+        {!busy && !(d?.users || []).length && (
+          <div className="sub" style={{ fontSize: 11.5 }}>冇用戶</div>
+        )}
+      </Sec>
+    </>
+  )
+}
+
 function DataManager() {
   const [tab, setTab] = useState('users')     // users | trips | export
   const [q, setQ] = useState('')
   const [d, setD] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [del, setDel] = useState(null)        // {kind, id, name, typed}
 
   async function load(which = tab, query = q) {
     setBusy(true)
@@ -441,17 +574,6 @@ function DataManager() {
     finally { setBusy(false) }
   }
   useEffect(() => { load(tab, q) }, [tab])   // eslint-disable-line
-
-  async function doDelete() {
-    if (!del) return
-    try {
-      if (del.kind === 'user') await api.adminDeleteUser(del.id, del.typed)
-      else await api.adminDeleteTrip(del.id, del.typed)
-      toast(`已刪除「${del.name}」`)
-      setDel(null)
-      await load()
-    } catch (e) { toast(e.message) }
-  }
 
   async function download(what) {
     try {
@@ -467,8 +589,7 @@ function DataManager() {
   }
 
   return (
-    <Sec title="🗄️ 數據管理">
-      {/* ⚠️ 分頁 */}
+    <Sec title="🗄️ 資料清單" hint={busy ? '…' : '唯讀'}>
       <div className="chips" style={{ marginBottom: 10 }}>
         {[['users', '👥 用戶'], ['trips', '🗂 旅程'], ['export', '📤 匯出']]
           .map(([k, label]) => (
@@ -489,7 +610,6 @@ function DataManager() {
         </div>
       )}
 
-      {/* ══ 匯出 ══ */}
       {tab === 'export' && (
         <>
           <div className="sub" style={{ fontSize: 11.5, lineHeight: 1.85 }}>
@@ -513,7 +633,6 @@ function DataManager() {
         </>
       )}
 
-      {/* ══ 用戶 ══ */}
       {tab === 'users' && d?.users && (
         <>
           <div className="sub" style={{ fontSize: 10.5, marginBottom: 6 }}>
@@ -524,7 +643,8 @@ function DataManager() {
               <div className="ic">{u.avatar || '🙂'}</div>
               <div className="info">
                 <h4>{u.display_name || u.email}
-                  {u.is_admin ? <span className="chip" style={{ fontSize: 9, marginLeft: 5 }}>admin</span> : null}
+                  {u.is_admin ? <span className="chip"
+                    style={{ fontSize: 9, marginLeft: 5 }}>admin</span> : null}
                 </h4>
                 <p className="mono" style={{ fontSize: 10 }}>
                   {u.email}{u.username ? ` · @${u.username}` : ''}
@@ -533,16 +653,11 @@ function DataManager() {
                   擁有 {u.owned} 旅程 · 成員 {u.member_of} · 加過 {u.items_made} 景點
                 </p>
               </div>
-              <button className="btn sm ghost"
-                style={{ padding: '4px 8px', fontSize: 11, color: 'var(--bad)' }}
-                onClick={() => setDel({ kind: 'user', id: u.id,
-                                        name: u.email, typed: '' })}>刪</button>
             </div>
           ))}
         </>
       )}
 
-      {/* ══ 旅程 ══ */}
       {tab === 'trips' && d?.trips && (
         <>
           <div className="sub" style={{ fontSize: 10.5, marginBottom: 6 }}>
@@ -560,58 +675,13 @@ function DataManager() {
                   {t.owner_email} · 👥{t.members} 📍{t.items} 🛒{t.shopping} 💸{t.expenses}
                 </p>
               </div>
-              <button className="btn sm ghost"
-                style={{ padding: '4px 8px', fontSize: 11, color: 'var(--bad)' }}
-                onClick={() => setDel({ kind: 'trip', id: t.id,
-                                        name: t.name, typed: '' })}>刪</button>
             </div>
           ))}
         </>
       )}
-
-      {/* ══ ⚠️⚠️ 刪除確認（要打名）══ */}
-      {del && (
-        <div onClick={() => setDel(null)} style={{
-          position: 'fixed', inset: 0, zIndex: 99, background: 'rgba(0,0,0,.72)',
-          backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', padding: 18,
-        }}>
-          <div onClick={e => e.stopPropagation()} className="card"
-            style={{ maxWidth: 420, width: '100%', borderColor: 'var(--bad)' }}>
-            <div style={{ fontWeight: 900, fontSize: 15, color: 'var(--bad)' }}>
-              ⚠️ 刪除{del.kind === 'user' ? '用戶' : '旅程'}
-            </div>
-            <div className="sub" style={{ fontSize: 12, marginTop: 8, lineHeight: 1.85 }}>
-              呢個**唔可以復原**。<br />
-              {del.kind === 'user'
-                ? '佢嘅旅程會**轉移**畀其他成員；冇其他成員嘅旅程會連內容一齊刪。'
-                : '旅程入面嘅景點、購物清單、開支**全部**會冇。'}
-            </div>
-            <div className="sub" style={{ fontSize: 11.5, marginTop: 12 }}>
-              打「<b className="mono">{del.name}</b>」確認：
-            </div>
-            <input className="input" autoFocus value={del.typed}
-              onChange={e => setDel({ ...del, typed: e.target.value })}
-              style={{ marginTop: 6 }} />
-            <div className="row" style={{ gap: 8, marginTop: 12 }}>
-              <button className="btn ghost" style={{ flex: 1 }}
-                onClick={() => setDel(null)}>取消</button>
-              <button className="btn primary" style={{ flex: 1, background: 'var(--bad)' }}
-                disabled={del.typed !== del.name}
-                onClick={doDelete}>確定刪除</button>
-            </div>
-          </div>
-        </div>
-      )}
     </Sec>
   )
 }
-
-// ══════════════════════════════════════════════════════════════
-// ⚠️ 呢啲一定要喺**模組層** —— 喺 component 入面定義會令
-//    每次 render 都變成「新元件類型」→ 子樹 unmount/remount
-//    → 入面嘅 input 每次打字都失焦（我哋試過呢個 bug）。
-// ══════════════════════════════════════════════════════════════
 
 function Sec({ title, children }) {
   return (

@@ -71,17 +71,10 @@ class TestAdminEndpoints:
     def test_export_endpoint(self, srv):
         assert '@app.get("/api/admin/export")' in srv
 
-    def test_delete_user_endpoint(self, srv):
-        assert '@app.delete("/api/admin/users/{user_id}")' in srv
-
-    def test_delete_trip_endpoint(self, srv):
-        assert '@app.delete("/api/admin/trips/{trip_id}")' in srv
-
     def test_all_require_admin(self, srv):
         """⚠️⚠️ 每一個 admin endpoint 都一定要 `admin_user` 守。"""
         for ep in ["/api/admin/users", "/api/admin/trips",
-                   "/api/admin/export", "/api/admin/users/{user_id}",
-                   "/api/admin/trips/{trip_id}"]:
+                   "/api/admin/export", "/api/admin/active-users"]:
             i = srv.index(f'"{ep}"')
             # ⚠️ 搵到下一個 @app 為止
             j = srv.find("@app.", i)
@@ -95,61 +88,92 @@ class TestAdminEndpoints:
             assert stripped.index(f'"{ep}"') < i, f"{ep} 喺 catch-all 之後 → 404"
 
 
-class TestDeleteSafety:
-    def test_user_delete_requires_confirm(self, srv):
-        """
-        ⚠️⚠️ 一定要打 email 確認 ——
-           今日已經試過兩次誤刪用戶資料。
-        """
-        i = srv.index("def admin_delete_user(")
-        j = srv.index("@app.", i + 10)
-        blk = nocode(srv[i:j])
-        assert 'confirm' in blk, "冇 confirm 參數"
-        assert '!= target["email"]' in blk, "冇對比 email"
-        assert "確認" in blk, "冇明確要求確認"
+class TestDashboardOnly:
+    """
+    ⚠️⚠️ 用戶澄清：
+       「我淨係想整嘅係有幾多數據？有啲咩用戶用緊咁樣我哋嘅 Dashboard。」
 
-    def test_trip_delete_requires_confirm(self, srv):
-        i = srv.index("def admin_delete_trip(")
-        blk = srv[i:i + 900]
-        assert "confirm" in blk, "冇 confirm"
-        assert "確認" in blk, "冇明確要求確認"
+       → **唔需要**刪除功能。Admin 應該係**唯讀**。
 
-    def test_cannot_delete_self(self, srv):
-        """
-        ⚠️⚠️ 唔可以刪自己 —— 會將自己鎖出後台。
-        """
-        i = srv.index("def admin_delete_user(")
-        blk = nocode(srv[i:i + 1200])
-        assert 'target["id"] == user["id"]' in blk, "冇擋「刪自己」"
-        assert "唔可以刪自己" in blk
+    ⚠️ 為咩咁做係好嘅：
+       · 少一個**誤刪**風險（今日試過兩次）
+       · Dashboard 嘅職責係「睇」，唔係「改」
+       · 真係要刪 → `server/tools/manage_account.py`
+         （有完整擁有權轉移 + 要打 email 確認）
+    """
 
-    def test_transfers_ownership_before_delete(self, srv):
-        """
-        ⚠️⚠️ 刪用戶之前一定要**轉移**旅程擁有權 ——
-           唔係嘅話朋友嘅旅程會一齊冇（今日中過）。
-        """
-        i = srv.index("def admin_delete_user(")
-        j = srv.index("@app.", i + 10)
-        blk = nocode(srv[i:j])
-        assert "UPDATE trips SET owner_id" in blk, "冇轉移旅程擁有權"
-        # ⚠️ 轉移一定要喺刪用戶之前
-        assert blk.index("UPDATE trips SET owner_id") < blk.index("DELETE FROM users"), \
-            "轉移喺刪除之後（太遲）"
+    def test_no_delete_endpoints(self, srv):
+        """⚠️ 刪除 endpoint 應該**完全冇咗**。"""
+        assert "admin_delete_user" not in srv, "仲有 admin_delete_user"
+        assert "admin_delete_trip" not in srv, "仲有 admin_delete_trip"
 
-    def test_transfers_item_authorship(self, srv):
-        """⚠️ 同上，`items.created_by` 都要轉移。"""
-        i = srv.index("def admin_delete_user(")
-        j = srv.index("@app.", i + 10)
-        blk = nocode(srv[i:j])
-        assert "UPDATE items SET created_by" in blk, "冇轉移 item 作者"
+    def test_no_delete_api_methods(self):
+        s = (WEB / "lib" / "api.js").read_text(encoding="utf-8")
+        assert "adminDeleteUser" not in s, "api 仲有 adminDeleteUser"
+        assert "adminDeleteTrip" not in s, "api 仲有 adminDeleteTrip"
 
-    def test_deletes_content_only_for_orphan_trips(self, srv):
-        """⚠️⚠️ 只可以刪「冇其他成員」嘅旅程內容 —— 唔可以連累朋友。"""
-        i = srv.index("def admin_delete_user(")
-        j = srv.index("@app.", i + 10)
-        blk = nocode(srv[i:j])
-        assert "user_id<>?" in blk or "user_id <> ?" in blk, \
-            "冇排除有其他成員嘅旅程"
+    def test_frontend_no_delete_buttons(self):
+        s = (WEB / "components" / "Admin.jsx").read_text(encoding="utf-8")
+        assert "del.typed" not in s, "前端仲有刪除確認"
+        assert "確定刪除" not in s, "前端仲有刪除掣"
+
+    def test_has_active_users_endpoint(self, srv):
+        """⚠️ 核心：要有「邊個用戶用緊」。"""
+        assert '@app.get("/api/admin/active-users")' in srv
+
+    def test_active_users_sorted_by_last_seen(self, srv):
+        """
+        ⚠️ 一定要按**最後活動**排序 ——
+           唔係註冊時間（咁先睇到邊個真係用緊）。
+        """
+        i = srv.index("def admin_active_users(")
+        blk = srv[i:i + 3000]
+        assert "last_seen" in blk, "冇 last_seen"
+        assert "ORDER BY last_seen DESC" in blk, "冇按最後活動排序"
+
+    def test_counts_include_all_data_types(self, srv):
+        """⚠️ 「有幾多數據」要包晒所有類型。"""
+        i = srv.index("def admin_active_users(")
+        blk = srv[i:i + 3000]
+        for k in ["users", "trips", "stops", "items", "shopping",
+                  "expenses", "friends", "events"]:
+            assert f'"{k}"' in blk, f"統計冇「{k}」"
+
+    def test_events_uses_created_at(self, srv):
+        """
+        ⚠️ `events` 表冇 `at` 欄 —— 係 `created_at`。
+           （實測爆過 `no such column: at`）
+        """
+        i = srv.index("def admin_active_users(")
+        blk = srv[i:i + 3000]
+        assert "MAX(created_at)" in blk, "用錯欄位（events 冇 'at'）"
+        assert "MAX(at)" not in blk, "仲用緊 'at'（會爆）"
+
+    def test_dashboard_component(self):
+        s = (WEB / "components" / "Admin.jsx").read_text(encoding="utf-8")
+        assert "function Dashboard()" in s, "冇 Dashboard 元件"
+        assert "<Dashboard />" in s, "Admin 冇用 Dashboard"
+
+    def test_dashboard_is_first(self):
+        """⚠️ Dashboard 要排最前（第一眼就見到）。"""
+        s = (WEB / "components" / "Admin.jsx").read_text(encoding="utf-8")
+        i_dash = s.index("<Dashboard />")
+        i_other = s.index("<DataManager />")
+        assert i_dash < i_other, "Dashboard 唔係排最前"
+
+    def test_shows_relative_time(self):
+        """⚠️ 「3 分鐘前」比 ISO 時間一眼睇得明。"""
+        s = (WEB / "components" / "Admin.jsx").read_text(encoding="utf-8")
+        assert "function ago(" in s, "冇相對時間"
+        for k in ["分鐘前", "個鐘前", "日前"]:
+            assert k in s, f"冇「{k}」"
+
+    def test_color_by_recency(self):
+        """⚠️ 用顏色分「幾近期用過」。"""
+        s = (WEB / "components" / "Admin.jsx").read_text(encoding="utf-8")
+        i = s.index("function Dashboard()")
+        blk = s[i:i + 5000]
+        assert "hrs < 1" in blk, "冇按時間分色"
 
 
 class TestExportPrivacy:
@@ -213,25 +237,9 @@ class TestAdminFrontend:
         assert "placeholder" in blk, "冇搜尋輸入"
         assert "搵 email" in blk or "搵旅程" in blk
 
-    def test_delete_needs_typed_confirmation(self):
-        """⚠️⚠️ 前端都要打名先撳得（唔係淨係後端擋）。"""
-        s = (WEB / "components" / "Admin.jsx").read_text(encoding="utf-8")
-        i = s.index("function DataManager()")
-        j = s.index("function Sec(", i)
-        blk = s[i:j]
-        assert "del.typed" in blk, "冇 typed state"
-        assert "disabled={del.typed !== del.name}" in blk, \
-            "冇擋「未打啱名就刪」"
-
-    def test_warns_irreversible(self):
-        """⚠️ 一定要講「唔可以復原」。"""
-        s = (WEB / "components" / "Admin.jsx").read_text(encoding="utf-8")
-        assert "唔可以復原" in s, "冇警告唔可以復原"
-
     def test_api_methods(self):
         s = (WEB / "lib" / "api.js").read_text(encoding="utf-8")
-        for m in ["adminUsers", "adminTrips", "adminExport",
-                  "adminDeleteUser", "adminDeleteTrip"]:
+        for m in ["adminUsers", "adminTrips", "adminExport", "adminActiveUsers"]:
             assert f"{m}:" in s, f"冇 api.{m}"
 
 

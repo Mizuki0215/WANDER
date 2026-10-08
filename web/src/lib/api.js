@@ -189,17 +189,19 @@ export const api = {
   adminOverview: (days = 30) => req('GET', '/api/admin/overview', { params: { days } }),
 
   // ── 後台：數據管理（用戶要求「我想有個後台去管理數據」）──
+  /** ⚠️ Dashboard：幾多數據 + 邊個用戶用緊 */
+  adminActiveUsers: (days = 30, limit = 40) =>
+    req('GET', '/api/admin/active-users', { params: { days, limit } }),
   adminUsers: (q = '', limit = 50, offset = 0) =>
     req('GET', '/api/admin/users', { params: { q, limit, offset } }),
   adminTrips: (q = '', limit = 50, offset = 0) =>
     req('GET', '/api/admin/trips', { params: { q, limit, offset } }),
   adminExport: (what = 'summary') =>
     req('GET', '/api/admin/export', { params: { what } }),
-  /** ⚠️ DELETE 要帶 confirm（打 email／旅程名）—— 唔可以淨係撳一下 */
-  adminDeleteUser: (id, confirm) =>
-    req('DELETE', `/api/admin/users/${id}`, { params: { confirm } }),
-  adminDeleteTrip: (id, confirm) =>
-    req('DELETE', `/api/admin/trips/${id}`, { params: { confirm } }),
+  // ⚠️⚠️ 刪除功能**已經刪走** ——
+  //    用戶澄清：「我淨係想整嘅係有幾多數據？有啲咩用戶用緊。」
+  //    → Dashboard 應該係**唯讀**（少一個誤刪風險）。
+  //    真係要刪嘅話用 server/tools/manage_account.py。
   /** ⚠️ 回報使用事件 —— 一定要 catch，唔可以影響主流程。 */
   track: (kind, target) => req('POST', '/api/events', { body: { kind, target } })
     .catch(() => {}),
