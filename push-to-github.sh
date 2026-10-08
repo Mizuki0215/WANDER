@@ -99,7 +99,7 @@ if [ -x "$GH" ]; then
     echo "  建立 / 更新 repo $OWNER/$REPO …"
     # ⚠️ 如果舊名 repo 仲喺，改名
     if [ "$OLD_GH" != "$REPO" ] && "$GH" repo view "$OWNER/$OLD_GH" >/dev/null 2>&1; then
-      echo "  ⚠️ 發現舊 repo「$OLD_GH」→ 改名做「$REPO」"
+      echo "  ⚠️ 發現舊 repo「${OLD_GH}」→ 改名做「${REPO}」"
       "$GH" repo rename "$REPO" "$OWNER/$OLD_GH" --yes 2>/dev/null || \
         echo "     （改名失敗，可能冇權限 —— 跳過）"
     fi
