@@ -138,7 +138,15 @@ if (await openApp('settings')) {
   check('③ 有 preset 揀（午夜/日落…）',
     t2.includes('午夜') || t2.includes('日落') || t2.includes('櫻花'),
     t2.slice(0, 90))
-  check('③ 有「我嘅相」上載選項', t2.includes('我嘅相'), t2.slice(0, 90))
+  // ⚠️ 已經有相嗰陣個掣係「換相」—— 兩個都要接受
+  check('③ 有「我嘅相」上載選項',
+    t2.includes('我嘅相') || t2.includes('換相'), t2.slice(0, 90))
+  // ⚠️⚠️ 有相嗰陣一定要有清晰度滑桿
+  if (t2.includes('換相')) {
+    check('③ 有「相片清晰度」滑桿', t2.includes('相片清晰度'))
+    check('③ 標籤係「0% 黑色 / 100% 睇得最清」',
+      t2.includes('0% 黑色') && t2.includes('100% 睇得最清'))
+  }
 }
 
 // ⚠️ ④ 朋友頁要有相機掣

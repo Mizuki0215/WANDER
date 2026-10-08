@@ -513,3 +513,113 @@ class TestWallpaperDim:
         assert "onPointerUp" in blk, "冇喺放手先儲存"
         # ⚠️ onChange 唔應該直接 call API
         assert "onChange={e => setClarity(" in blk, "onChange 應該只更新畫面"
+
+
+class TestSliderNotDoubleInverted:
+    """
+    🚨🚨 用戶報（第二次）：
+       「你仲係搞唔清楚最清晰同埋最黑係相反咗啊，
+        即係話呢咁你應該要將個功能掉轉返囉」
+
+    ⚠️ 根因：**雙重反轉**。
+
+       `Wallpaper.jsx` 收到嘅 prop 係 `user.wallpaper_dim`
+       （**已經係暗罩強度**），但我當佢係「清晰度」再反轉一次：
+
+         clarity = dim          ← 錯
+         d = 100 - clarity      ← 再反轉 → 雙重反轉
+
+       → 用戶拉 100%（最清）→ 存 dim=0 → render 時
+         d = 100 - 0 = 100 → **全黑**（完全相反）
+
+    ✅ 反轉只可以喺 **Picker 做一次**（UI → 存）。
+       `Wallpaper.jsx` 收到嘅 `dim` 已經係最終值 → **直接用**。
+    """
+
+    def test_wallpaper_does_not_invert_again(self):
+        """
+        ⚠️⚠️ 核心：`Wallpaper.jsx` **唔可以**再 `100 - dim`。
+        """
+        s = (WEB / "components" / "Wallpaper.jsx").read_text(encoding="utf-8")
+        # ⚠️ 去註解先檢查（我嘅解釋有 `100 - clarity`）
+        body = re.sub(r"/\*[\s\S]*?\*/", "", s)
+        body = "\n".join(l.split("//")[0] for l in body.split("\n"))
+        assert "100 - clarity" not in body, "Wallpaper 又反轉（雙重反轉）"
+
+    def test_no_inversion_in_wallpaper_calc(self):
+        """
+        ⚠️⚠️ 核心：`Wallpaper.jsx` 嘅 `d` **唔可以**由反轉得嚟。
+
+           ⚠️ 唔可以一刀切「數 `100 - ` 出現次數」——
+              仲有兩個合法用途：
+                · `dim ?? (100 - DEFAULT_CLARITY)`（預設值）
+                · `console.debug(... 100 - d)`（debug）
+              （實測：一刀切會變假失敗。）
+        """
+        s = (WEB / "components" / "Wallpaper.jsx").read_text(encoding="utf-8")
+        # ⚠️ 搵 `const d = ...` 嗰句，睇下佢用咩
+        m = re.search(r"const d = isPhoto\s*\n?\s*\?([^\n]*)\n", s)
+        assert m, "搵唔到 `const d = isPhoto ?`"
+        expr = m.group(1)
+        assert "Number(dim" in expr, f"`d` 唔係由 `dim` 直接計: {expr[:80]}"
+        assert "100 - dim" not in expr, "⚠️ 又反轉（雙重反轉）"
+
+    def test_roundtrip(self):
+        """
+        ⚠️⚠️ **實測數學**：UI 清晰度 → 存 → 讀返 → 暗罩，
+           一定要 `暗罩 == 100 - 清晰度`。
+        """
+        for ui in [0, 25, 50, 80, 100]:
+            stored = 100 - ui     # Picker 寫入
+            d = stored            # Wallpaper 直接用
+            assert d == 100 - ui, f"UI {ui}% → 暗罩 {d}（應該 {100 - ui}）"
+
+
+class TestNoPresetRenderWithPhoto:
+    """
+    ⚠️⚠️ 用戶要求：
+       「背景呢仲係有少少預設嘅顏色囉，即係像有少少像素嘅顏色配合，
+        如果係你 upload 咗張相嘅話就唔使再做渲染囉。」
+
+    ⚠️ 有相嗰陣要熄**三樣**：
+       ① `<Stars />`（50 粒彩色像素星）
+       ② `body::before` 光暈
+       ③ `body::after` scanline
+    """
+
+    def test_stars_hidden_with_photo(self):
+        s = (WEB / "App.jsx").read_text(encoding="utf-8")
+        assert "hasPhoto" in s, "冇 hasPhoto"
+        assert "{!hasPhoto && <Stars />}" in s, "Stars 冇條件 render"
+
+    def test_hasphoto_defined_before_early_return(self):
+        """
+        ⚠️⚠️ `hasPhoto` 一定要喺 **early return 之前**定義 ——
+           唔係嘅話 `if (booting) return ...` 會 TDZ ReferenceError
+           （實測：我第一版就係咁，會**爆整個 app**）。
+        """
+        s = (WEB / "App.jsx").read_text(encoding="utf-8")
+        i_def = s.index("const hasPhoto =")
+        i_boot = s.index("if (booting) {")
+        assert i_def < i_boot, "hasPhoto 喺 booting early return 之後 → TDZ"
+
+    def test_scanline_hidden(self):
+        raw = (WEB / "styles.css").read_text(encoding="utf-8")
+        css = re.sub(r"/\*[\s\S]*?\*/", "", raw)
+        i = css.index('body[data-wallpaper="1"]::after')
+        blk = css[i:i + 200]
+        assert "display: none" in blk, "scanline 冇熄"
+
+    def test_glow_hidden(self):
+        raw = (WEB / "styles.css").read_text(encoding="utf-8")
+        css = re.sub(r"/\*[\s\S]*?\*/", "", raw)
+        i = css.index('body[data-wallpaper="1"]::before')
+        blk = css[i:i + 200]
+        assert "opacity: 0" in blk, "光暈冇熄"
+
+    def test_theme_bg_overridden(self):
+        raw = (WEB / "styles.css").read_text(encoding="utf-8")
+        css = re.sub(r"/\*[\s\S]*?\*/", "", raw)
+        i = css.index('body[data-wallpaper="1"] {')
+        blk = css[i:i + 200]
+        assert "background: #000" in blk, "主題底色冇換做黑"

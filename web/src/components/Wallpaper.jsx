@@ -84,18 +84,32 @@ export default function Wallpaper({ value, dim }) {
     //
     //    ⚠️ 只喺**有相**嗰陣先套用 —— preset 本身已經夠暗，
     //       再加暗罩會變全黑。
-    // ⚠️⚠️ 用戶要求（第二次）：
-    //    「嗰個槓桿應該 100% 係 show 得最清楚，0% 係黑色咁樣囉。」
+    // ⚠️⚠️⚠️ 用戶報：「你仲係搞唔清楚最清晰同埋最黑係相反咗啊，
+    //    即係話呢咁你應該要將個功能掉轉返囉」
     //
-    //    ⚠️ DB 存嘅係 `wallpaper_dim`（暗罩強度：100 = 最暗）,
-    //       但 UI 用「清晰度」—— 所以要**反轉**：
-    //         清晰度 100 → dim 0（完全冇暗罩，睇得最清）
-    //         清晰度 0   → dim 100（全黑）
-    const clarity = isPhoto
-      ? Math.max(0, Math.min(100, Number(dim ?? DEFAULT_CLARITY) || 0))
-      : 100
-    const d = isPhoto ? (100 - clarity) : 0
+    //    🚨 根因：**雙重反轉**！
+    //
+    //    ⚠️ 呢個 prop（`dim`）由 App 傳入嘅係
+    //       `user.wallpaper_dim` —— 即係**已經係暗罩強度**。
+    //       但我當咗佢係「清晰度」再反轉一次：
+    //         clarity = dim          ← 錯（dim 唔係 clarity）
+    //         d = 100 - clarity      ← 再反轉 → 雙重反轉
+    //
+    //       → 用戶拉 100%（最清）→ 存 dim=0 → render 時
+    //         d = 100 - 0 = 100 → **全黑**（完全相反）
+    //
+    //    ✅ 修法：**反轉只喺 Picker 做一次**（UI 清晰度 → 存 dim）。
+    //       呢度 `dim` 已經係最終暗罩強度 → **直接用**。
+    const d = isPhoto
+      ? Math.max(0, Math.min(100, Number(dim ?? (100 - DEFAULT_CLARITY)) || 0))
+      : 0
     el.style.setProperty('--wall-dim', String(d))
+
+    // ⚠️ 除錯用：喺 console 睇得到實際值
+    if (isPhoto && typeof console !== 'undefined') {
+      // eslint-disable-next-line no-console
+      console.debug?.('[wallpaper] dim =', d, '→ 清晰度', 100 - d)
+    }
 
     // ⚠️⚠️ 暗罩薄嗰陣，字會睇唔到 —— 用**文字陰影**補救。
     //    ⚠️ 為咩唔用更厚嘅暗罩：用戶明確話要睇到人樣。

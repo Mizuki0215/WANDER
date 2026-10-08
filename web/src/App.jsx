@@ -493,9 +493,21 @@ export default function App() {
       .catch(e => toast(e.message))
   }, [user, refreshTrips, openTrip])
 
+  /**
+   * ⚠️⚠️ 用咗自己張相做背景？（用戶要求）
+   *    「背景呢仲係有少少預設嘅顏色囉，即係像有少少像素嘅顏色配合，
+   *      如果係你 upload 咗張相嘅話就唔使再做渲染囉。」
+   *
+   *    ⚠️ 有相嗰陣要熄：
+   *       · `<Stars />`（50 粒彩色像素星）
+   *       · `body::before` 光暈（CSS 已處理）
+   *       · `body::after` scanline（CSS 已處理）
+   */
+  const hasPhoto = String(user?.wallpaper || '').startsWith('/uploads/')
+
   if (booting) {
     return (
-      <div className="app"><Stars />
+      <div className="app">{!hasPhoto && <Stars />}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
                       height: '100vh', gap: 10 }}>
           <Spinner /> <span className="dim">載入中…</span>
@@ -506,7 +518,7 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="app"><Stars />
+      <div className="app">{!hasPhoto && <Stars />}
         <PwaBar />
         <Login onLogin={async (u) => {
           setUser(u)
@@ -521,6 +533,8 @@ export default function App() {
       </div>
     )
   }
+
+
 
   const inTrip = !!tripId && !showAdmin
   /**
@@ -584,7 +598,7 @@ export default function App() {
     return (
       <div className="app">
         <Wallpaper value={user?.wallpaper} dim={user?.wallpaper_dim} />
-      <Stars />
+      {!hasPhoto && <Stars />}
         <HomeScreen
           trips={trips} trip={trip} items={items} stops={stops} user={user}
           badges={{ shopping: shopBadge, friends: friendBadge }}
@@ -609,7 +623,7 @@ export default function App() {
   return (
     <div className="app">
       <Wallpaper value={user?.wallpaper} dim={user?.wallpaper_dim} />
-      <Stars />
+      {!hasPhoto && <Stars />}
       <PwaBar />
 
       {showAdmin && isAdmin && (

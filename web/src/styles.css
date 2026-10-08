@@ -1596,8 +1596,10 @@ body[data-wallpaper="1"]::before {
   opacity: 0;
 }
 body[data-wallpaper="1"]::after {
-  /* ⚠️ scanline 都減到好弱（保留少少質感，但唔阻住張相）*/
-  opacity: .28;
+  /* ⚠️⚠️ 用戶：「背景呢仲係有少少預設嘅顏色囉，即係像有少少像素
+        嘅顏色配合，如果係你 upload 咗張相嘅話就唔使再做渲染囉。」
+     ⚠️ 即係連 scanline 都唔要 —— 有相就**完全唔做渲染**。 */
+  display: none;
 }
 
 /* ⚠️ 調暗罩嘅滑桿 */
