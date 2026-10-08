@@ -146,7 +146,7 @@ echo "════════════════════════�
 if [ "$CODE" = "200" ]; then
   echo "  ✅ 上線！"
 else
-  echo "  ⚠️ 本地 server 未 ready（HTTP $CODE）—— 等幾秒再試"
+  echo "  ⚠️ 本地 server 未 ready（HTTP ${CODE}）—— 等幾秒再試"
 fi
 echo "════════════════════════════════════════════════════════════"
 echo

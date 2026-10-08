@@ -370,3 +370,62 @@ class TestDeploymentFiles:
         s = p.read_text(encoding="utf-8")
         # ⚠️ 唔可以綁死 macOS 嘅 path
         assert "/opt/homebrew" not in s, "run.sh 綁死咗 macOS 嘅 python path"
+
+
+class TestShellScriptSafety:
+    """
+    ⚠️⚠️ 實測捉到嘅 bug：
+
+       用戶跑 `./push-to-github.sh` →
+       ```
+       ./push-to-github.sh: line 167: REPO?: unbound variable
+       ```
+
+       原因：`echo "建立咗 $OWNER/$REPO（private）"`
+       —— `$REPO` 後面跟住**全形括號** `（`（U+FF08）。
+
+       ⚠️ 理論上 bash 應該停喺非識別字元，但實測喺某啲
+          locale / bash 版本之下會出事。
+
+       ✅ 修法：`$VAR` 後面跟非 ASCII 就一定要寫 `${VAR}`。
+    """
+
+    SCRIPTS = ["push-to-github.sh", "host.sh", "run.sh", "wander.sh"]
+
+    @pytest.mark.parametrize("name", SCRIPTS)
+    def test_var_before_non_ascii_uses_braces(self, name):
+        """
+        ⚠️ 掃描 script 入面所有 `$VAR` —— 如果後面跟住
+           非 ASCII 字元，一定要用 `${VAR}`。
+        """
+        p = ROOT / name
+        if not p.exists():
+            pytest.skip(f"冇 {name}")
+        s = p.read_text(encoding="utf-8")
+        bad = []
+        for i, line in enumerate(s.split("\n"), 1):
+            if line.strip().startswith("#"):
+                continue
+            for m in re.finditer(r"\$([A-Za-z_][A-Za-z0-9_]*)", line):
+                nxt = line[m.end():m.end() + 1]
+                if nxt and ord(nxt) > 127:
+                    bad.append(f"{name}:{i}  {m.group(0)}{nxt}")
+        assert not bad, (
+            "⚠️ 呢啲位一定要用 ${VAR}（後面跟住非 ASCII）：\n  "
+            + "\n  ".join(bad)
+        )
+
+    def test_push_script_has_set_u_safe(self):
+        """⚠️ `set -u` 之下任何未設變數都會爆 —— 要當心。"""
+        s = (ROOT / "push-to-github.sh").read_text(encoding="utf-8")
+        assert "set -euo pipefail" in s, "應該有 set -euo pipefail"
+        # ⚠️ 所有用嘅變數都要有 default 或者先設定
+        for v in ["OWNER", "REPO", "TOKEN"]:
+            assert f'{v}="' in s or f'${{{v}:-' in s, f"{v} 冇 default"
+
+    def test_host_script_same(self):
+        p = ROOT / "host.sh"
+        if not p.exists():
+            pytest.skip("冇 host.sh")
+        s = p.read_text(encoding="utf-8")
+        assert "set -euo pipefail" in s

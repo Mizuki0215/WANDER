@@ -164,7 +164,7 @@ if [ "$CODE" = "404" ]; then
     "https://api.github.com/user/repos" \
     -d "{\"name\":\"$REPO\",\"private\":true,\"description\":\"Wander — 旅行計劃 app\"}")
   if echo "$RESP" | grep -q '"full_name"'; then
-    echo "  ✅ 建立咗 $OWNER/$REPO（private）"
+    echo "  ✅ 建立咗 $OWNER/${REPO}（private）"
   else
     echo "  ✗ 建立失敗："
     echo "$RESP" | head -c 400 | sed 's/^/      /'
