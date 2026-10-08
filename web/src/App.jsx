@@ -387,7 +387,7 @@ export default function App() {
    *     ① 開機從來冇「揀旅程」→ `tripId` 永遠 null
    *        （已修：抽 `pickTrip()`，開機都叫）
    *     ② ⚠️ 就算 `tripId` 有值，**都冇 effect 去 load 旅程**——
-   *        `refreshTrip()` 只喺用戶撳「refresh」或者 `openTrip()` 嗰陣叫。
+   *        `refreshTrip(tripId)` 只喺用戶撳「refresh」或者 `openTrip()` 嗰陣叫。
    *
    *        → 結果：旅程 header 顯示「0 日 · 👥 0 · ✦ 0」，
    *          購物清單永遠「空嘅」、行程永遠空白。
@@ -432,7 +432,7 @@ export default function App() {
         let n = 0
         for (const it of found) { try { await api.addItem(tid, it); n++ } catch {} }
         toast(`已加入 ${n} 個收藏（${list[0].name}）✓`)
-        if (tripId) await refreshTrip()
+        if (tripId) await refreshTrip(tripId)
       } catch (e) { toast(e.message) }
     })()
   }, [user])   // eslint-disable-line
@@ -739,13 +739,13 @@ export default function App() {
                 分工買嘢，買完剔咗就唔會買雙份
               </div>
               <ShoppingList trip={trip} members={trip?.members?.map(m => m.display_name || m.email) || []}
-                onRefresh={() => refreshTrip()} />
+                onRefresh={() => refreshTrip(tripId)} />
               <div style={{ height: 40 }} />
             </div>
           )}
           {tab === 'discover' && (
             <Discover tripId={tripId} items={items}
-              onRefresh={() => refreshTrip()} onOpenMap={() => setTab('map')}
+              onRefresh={() => refreshTrip(tripId)} onOpenMap={() => setTab('map')}
               onEditItem={setDetail} />
           )}
           {tab === 'saved' && (
@@ -761,20 +761,20 @@ export default function App() {
                 有人墊支就記落嚟，最後自動計返最少轉帳次數
               </div>
               <Settlement trip={trip} user={user}
-                onRefresh={() => refreshTrip()} />
+                onRefresh={() => refreshTrip(tripId)} />
               <div style={{ height: 40 }} />
             </div>
           )}
           {tab === 'calendar' && (
             <Calendar trip={trip} items={items} stops={stops}
-              onRefresh={() => refreshTrip()} onEditItem={setDetail} />
+              onRefresh={() => refreshTrip(tripId)} onEditItem={setDetail} />
           )}
           {tab === 'map' && (
             <MapView items={items} stops={stops}
-              onRefresh={() => refreshTrip()} onEditItem={setDetail} />
+              onRefresh={() => refreshTrip(tripId)} onEditItem={setDetail} />
           )}
           {tab === 'friends' && (
-            <Friends trip={trip} me={user} onRefresh={() => refreshTrip()}
+            <Friends trip={trip} me={user} onRefresh={() => refreshTrip(tripId)}
               prefill={pendingAdd} onPrefillDone={() => setPendingAdd(null)}
               onTripsChanged={refreshTrips} />
           )}
@@ -806,7 +806,7 @@ export default function App() {
 
       {detail && (
         <ItemDetail item={detail} trip={trip}
-          onClose={() => setDetail(null)} onRefresh={() => refreshTrip()} />
+          onClose={() => setDetail(null)} onRefresh={() => refreshTrip(tripId)} />
       )}
 
       {!isHome && <nav className="nav" ref={navRef}>

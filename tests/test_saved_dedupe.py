@@ -209,3 +209,101 @@ class TestUrlShortLink:
         assert it.name == "BOOKOFF Fukuoka Hakataguchi Store", f"名錯: {it.name!r}"
         assert abs(it.lat - 33.5880184) < 1e-4, f"座標錯: {it.lat}"
         assert it.country == "日本", f"國家錯: {it.country!r}"
+
+
+class TestRefreshIsNotANoOp:
+    """
+    🚨🚨 實測捉到：`onRefresh()` **完全冇用**。
+
+    ⚠️ 我為咗修無限 loop，將
+         `const tid = id || tripId`  改成  `const tid = id`
+       但**冇改嗰 7 個** `onRefresh={() => refreshTrip()}` →
+       全部變咗**空操作**（`id` 係 undefined → 即刻 return）。
+
+    ⚠️ 用戶報：「可能係因為冇即時更新，可能要將佢 load 一 load
+               佢先至會更新」
+
+    ⚠️⚠️ 呢個 bug 喺 UI 上**睇唔出** —— refresh 掣撳完好似冇事，
+       其實完全冇打 API。所以一定要用**原始碼**檢查。
+    """
+
+    @pytest.fixture(scope="class")
+    def app(self):
+        return (ROOT / "web" / "src" / "App.jsx").read_text(encoding="utf-8")
+
+    def test_refresh_trip_requires_id(self, app):
+        """⚠️ `refreshTrip` 要 id —— 所以要記住所有 caller 都要傳。"""
+        i = app.index("const refreshTrip = useCallback(")
+        blk = app[i:i + 300]
+        assert "const tid = id" in blk, "refreshTrip 冇用 id"
+        assert "if (!tid) return" in blk, "refreshTrip 冇早退"
+
+    def test_no_bare_refresh_trip_calls(self, app):
+        """
+        ⚠️⚠️ 核心：唔可以有 `refreshTrip()`（冇參數）——
+           咁樣一定係 no-op。
+        """
+        import re
+        # ⚠️ 去註解先（我嘅解釋有 `refreshTrip()`）
+        body = re.sub(r"/\*[\s\S]*?\*/", "", app)
+        body = "\n".join(l.split("//")[0] for l in body.split("\n"))
+        bare = re.findall(r"refreshTrip\(\)", body)
+        assert not bare, (
+            f"⚠️ 有 {len(bare)} 個 `refreshTrip()` 冇傳 id → "
+            f"onRefresh 會變空操作，加完景點清單唔會更新")
+
+    def test_all_onrefresh_pass_tripid(self, app):
+        """⚠️ 每個 onRefresh 都要傳 `tripId`。"""
+        import re
+        ons = re.findall(r"onRefresh=\{\(\) => refreshTrip\(([^)]*)\)\}", app)
+        assert ons, "搵唔到 onRefresh"
+        bad = [o for o in ons if "tripId" not in o]
+        assert not bad, f"呢啲 onRefresh 冇傳 tripId: {bad}"
+
+
+class TestRefreshDoesNotReplayAnimation:
+    """
+    ⚠️⚠️ 用戶要求：
+       「更新完之後即刻 refresh 一次，但係 refresh 一次呢…
+        如果係每次更新數據一次嘅話就唔需要有一個 Animation 囉」
+
+    ✅ 即係要分開兩件事：
+       · **開新 page**（真 reload）→ **要**播動畫
+       · **更新數據**（refreshTrip）→ **唔要**播動畫
+
+    ⚠️ 設計：動畫由 `booted` 控制，而 `booted` **只由開機動畫設一次**。
+       `refreshTrip` 完全唔掂 `booting`/`booted` → 自然唔會重播。
+    """
+
+    @pytest.fixture(scope="class")
+    def app(self):
+        return (ROOT / "web" / "src" / "App.jsx").read_text(encoding="utf-8")
+
+    def test_booted_set_only_by_bootscreen(self, app):
+        """⚠️ `setBooted(true)` 只可以出現一次（開機動畫）。"""
+        import re
+        hits = re.findall(r"setBooted\(true\)", app)
+        assert len(hits) == 1, f"setBooted(true) 出現 {len(hits)} 次（應該 1 次）"
+        i = app.index("setBooted(true)")
+        assert "BootScreen" in app[max(0, i - 200):i], "唔係由 BootScreen 設"
+
+    def test_refresh_trip_does_not_touch_animation(self, app):
+        """
+        ⚠️⚠️ 核心：`refreshTrip` 入面**唔可以**有
+           `setBooting` / `setBooted` —— 唔係嘅話每次更新都會播動畫。
+        """
+        i = app.index("const refreshTrip = useCallback(")
+        j = app.index("}, [", i)
+        blk = app[i:j]
+        assert "setBooting" not in blk, "⚠️ refreshTrip 會播開機動畫"
+        assert "setBooted" not in blk, "⚠️ refreshTrip 會重播動畫"
+
+    def test_booting_state_separate_from_booted(self, app):
+        """⚠️ 兩個 state 分開：`booting`（載入中）vs `booted`（播過動畫）。"""
+        assert "const [booting, setBooting] = useState(true)" in app
+        assert "const [booted, setBooted] = useState(false)" in app
+
+    def test_saveall_awaits_refresh(self):
+        """⚠️ 加完之後要 **await** refresh（唔係 fire-and-forget）。"""
+        s = (WEB / "components" / "Discover.jsx").read_text(encoding="utf-8")
+        assert "await onRefresh()" in s, "冇 await onRefresh"
