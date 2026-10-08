@@ -45,9 +45,21 @@ echo
 say "Bundle：$SRC（$(stat -c%s "$SRC" 2>/dev/null || stat -f%z "$SRC") bytes）"
 
 # ── ① 檢查 bundle 內容 ────────────────────────────────────────
+# ⚠️⚠️ 一定要**先 capture 落變數**再用 grep ——
+#    唔可以 `tar tzf ... | grep -q`！
+#    ⚠️ 根因：`grep -q` 搵到就**即刻退出** →
+#       `tar` 收到 SIGPIPE → 非零 exit →
+#       `set -o pipefail` 令**成個管道**當失敗 →
+#       `|| die` 誤報「bundle 入面冇 wander.db」。
+#    （實測：用戶個 bundle 明明有 wander.db，但 script 話冇。）
+#
+#    ✅ 而且 macOS tar 會出 `LIBARCHIVE.xattr` 警告去 stderr ——
+#       都要一齊食咗，唔好嘈住個 output。
 say "檢查 bundle…"
-tar tzf "$SRC" | grep -q "wander.db" || die "bundle 入面冇 wander.db"
-N_UP="$(tar tzf "$SRC" | grep -c 'uploads/' || true)"
+LIST="$(tar tzf "$SRC" 2>/dev/null || true)"
+[ -n "$LIST" ] || die "bundle 解唔到（可能壞咗）"
+printf '%s\n' "$LIST" | grep -q "wander.db" || die "bundle 入面冇 wander.db"
+N_UP="$(printf '%s\n' "$LIST" | grep -c 'uploads/' || true)"
 say "  ✓ 有 wander.db + ${N_UP} 個 uploads 項"
 
 # ── ② 停 app ──────────────────────────────────────────────────

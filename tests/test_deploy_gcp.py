@@ -392,3 +392,79 @@ class TestEnvFile:
             capture_output=True, text=True)
         for ph in ["__REPO__", "__HOST__", "__ADMIN__", "__MODE__", "__BASEURL__"]:
             assert ph not in r.stdout, f"仲有 {ph}"
+
+
+class TestMigrateScript:
+    """
+    ⚠️⚠️ 用戶實測：bundle 明明有 `wander.db`，但 migrate script 話「冇」。
+
+       ⚠️ 根因：`tar tzf "$SRC" | grep -q "wander.db"`
+          · `grep -q` 搵到就**即刻退出**
+          · `tar` 收到 **SIGPIPE** → 非零 exit
+          · `set -o pipefail` 令**成個管道**當失敗
+          → `|| die` 誤報
+
+       ⚠️ 呢個係經典陷阱 —— `pipefail` + `grep -q` 一定中。
+    """
+
+    @pytest.fixture(scope="class")
+    def m(self):
+        p = ROOT / "migrate-to-vm.sh"
+        assert p.exists(), "冇 migrate-to-vm.sh"
+        return p.read_text(encoding="utf-8")
+
+    def test_exists(self):
+        assert (ROOT / "migrate-to-vm.sh").exists()
+
+    def test_syntax(self):
+        import subprocess
+        r = subprocess.run(["bash", "-n", str(ROOT / "migrate-to-vm.sh")],
+                           capture_output=True, text=True)
+        assert r.returncode == 0, f"語法錯: {r.stderr}"
+
+    def test_no_grep_q_in_pipe(self, m):
+        """
+        ⚠️⚠️ 核心：唔可以有 `| grep -q` ——
+           `pipefail` 之下會因為 SIGPIPE 假失敗。
+        """
+        import re
+        body = "\n".join(l for l in m.split("\n")
+                         if not l.strip().startswith("#"))
+        bad = re.findall(r"\|\s*grep\s+-q", body)
+        assert not bad, (
+            f"⚠️ 有 {len(bad)} 個 `| grep -q` —— "
+            f"pipefail + SIGPIPE 會誤報（實測中過）")
+
+    def test_captures_tar_output_first(self, m):
+        """⚠️ 應該 `LIST="$(tar tzf ...)"` 先，再 `printf | grep`。"""
+        assert 'LIST="$(tar tzf' in m, "冇 capture tar output"
+        assert 'printf' in m, "冇用 printf 餵 grep"
+
+    def test_suppresses_macos_xattr(self, m):
+        """
+        ⚠️ macOS tar 出 `LIBARCHIVE.xattr` 警告去 stderr ——
+           要 `2>/dev/null` 食咗，唔好嘈住 output。
+        """
+        assert "2>/dev/null" in m, "冇食 stderr"
+
+    def test_stops_app_before_overwrite(self, m):
+        """⚠️ 一定要停 app —— 唔係會覆蓋緊寫入中嘅 DB。"""
+        i_stop = m.index("systemctl stop wander")
+        i_copy = m.index('cp -f "$TMP/wander/wander.db"')
+        assert i_stop < i_copy, "冇先停 app"
+
+    def test_backs_up_existing(self, m):
+        """⚠️ VM 上已經有 DB 就要備份（唔好直接覆蓋）。"""
+        assert "wander-backup-" in m, "冇備份"
+
+    def test_restarts_app(self, m):
+        assert "systemctl start wander" in m, "冇起返 app"
+
+    def test_verifies_after(self, m):
+        """⚠️ 搬完要**驗證**（列用戶 + 統計 + 相片數）。"""
+        assert "users" in m and "trips" in m, "冇驗證統計"
+        assert "uploads" in m, "冇驗證相片"
+
+    def test_has_backup_hint(self, m):
+        """⚠️ 要教用戶定期備份（VM 上嘅 data 冇喺 GitHub）。"""
+        assert "wander-backup" in m and "gcloud compute ssh" in m, "冇備份提示"
