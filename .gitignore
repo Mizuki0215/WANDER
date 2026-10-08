@@ -96,3 +96,8 @@ server/wander.backup-*.db
 .chrome-data/
 .cd*/
 *.tgz
+
+# ⚠️⚠️ Data 搬遷 bundle —— 有真實用戶資料，絕對唔可以 commit
+wander-data*.tgz
+wander-backup*.tgz
+*.tgz
