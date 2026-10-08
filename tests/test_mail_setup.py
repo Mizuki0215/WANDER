@@ -524,3 +524,59 @@ class TestNoPrivacyLeaks:
         for e in emails:
             assert "@gmail.com" not in e, f"⚠️ commit 用咗真 Gmail：{e}"
             assert "yeetungchan" not in e, f"⚠️ commit 用咗真名：{e}"
+
+
+class TestHostingOptions:
+    """
+    ⚠️ 用戶問：「仲有冇其他可以 push host link?」
+
+       ⚠️ 最重要嘅事實：**GitHub 只存 code，唔會跑 app**。
+          要一個「撳得入去用」嘅 link，一定要一部真 server。
+    """
+
+    def test_hosting_doc_exists(self):
+        p = ROOT / "HOSTING.md"
+        assert p.exists(), "冇 HOSTING.md"
+        s = p.read_text(encoding="utf-8")
+        for k in ["cloudflared", "ngrok", "Codespaces", "Fly.io", "Render"]:
+            assert k in s, f"HOSTING.md 冇提「{k}」"
+
+    def test_doc_says_pages_cannot_work(self):
+        """⚠️⚠️ 一定要講清楚 Pages 做唔到 —— 用戶問過好多次。"""
+        s = (ROOT / "HOSTING.md").read_text(encoding="utf-8")
+        assert "GitHub Pages" in s, "冇提 Pages"
+        assert "靜態" in s, "冇解釋為咩 Pages 做唔到"
+
+    def test_doc_marks_free_but_needs_card(self):
+        """⚠️ Fly.io 要綁卡 —— 一定要老實講。"""
+        s = (ROOT / "HOSTING.md").read_text(encoding="utf-8")
+        assert "信用卡" in s, "冇提信用卡"
+        assert "綁卡" in s or "綁信用卡" in s, "冇講 Fly.io 要綁卡"
+
+    def test_doc_warns_render_no_disk(self):
+        """⚠️⚠️ Render 免費層冇 disk → 每次 deploy 清空資料。"""
+        s = (ROOT / "HOSTING.md").read_text(encoding="utf-8")
+        assert "清空" in s, "冇警告 Render 會清空資料"
+
+    def test_host_script_has_backends(self):
+        s = (ROOT / "host.sh").read_text(encoding="utf-8")
+        assert "--ngrok" in s, "host.sh 冇 ngrok 選項"
+        assert "--cloudflared" in s, "host.sh 冇 cloudflared 選項"
+        assert "ERR_NGROK" in s, "host.sh 冇處理 ngrok 嘅 ERR_NGROK"
+
+    def test_host_script_defaults_cloudflared(self):
+        """
+        ⚠️ 預設一定要 cloudflared —— 唔使註冊、冇 agent 限制。
+           （實測 ngrok 免費版會撞 ERR_NGROK_802。）
+        """
+        s = (ROOT / "host.sh").read_text(encoding="utf-8")
+        assert 'BACKEND="cloudflared"' in s, "預設唔係 cloudflared"
+
+    def test_deploy_script_has_volume_step(self):
+        """
+        ⚠️⚠️ Fly.io 一定要建 volume ——
+           唔做嘅話每次 deploy 都清空所有用戶資料。
+        """
+        s = (ROOT / "deploy.sh").read_text(encoding="utf-8")
+        assert "volumes create" in s, "deploy.sh 冇建 volume"
+        assert "清空" in s, "冇警告唔建 volume 會清空"

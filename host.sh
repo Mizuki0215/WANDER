@@ -11,8 +11,14 @@
 #    而且預設建議你用 invite 模式。
 #
 # 用法：
-#     ./host.sh              # 起 server + tunnel（會問安全選項）
-#     ./host.sh --open       # 唔問，直接用 open（⚠️ 唔建議）
+#     ./host.sh                  # cloudflared（推薦，唔使註冊）
+#     ./host.sh --cloudflared    # 同上
+#     ./host.sh --ngrok          # ngrok（⚠️ 免費版唔穩定）
+#     ./host.sh --open           # 唔問安全選項（⚠️ 唔建議）
+#
+# ⚠️ 為咩預設 cloudflared：
+#   唔使註冊、唔使 authtoken、冇 agent 限制、冇警告頁。
+#   實測 ngrok 免費版會撞 ERR_NGROK_802。
 #
 # ⚠️ cloudflared quick tunnel 嘅網址**每次都會變** ——
 #    所以每次都要重新跑呢個 script（佢會自動更新 WANDER_BASE_URL）。
@@ -25,6 +31,18 @@ cd "$ROOT"
 PY="${PYTHON:-python3}"
 PORT="${WANDER_PORT:-8787}"
 SKIP_ASK="${1:-}"
+# ⚠️ 用戶問：「仲有冇其他可以 push host link?」
+#    → 加 ngrok 做第二個 backend（已經裝咗，而且有 authtoken）
+#      ⚠️ 但 ngrok 免費版唔穩定（實測撞到 ERR_NGROK_802）
+BACKEND="cloudflared"
+case "${2:-${WANDER_TUNNEL:-cloudflared}}" in
+  ngrok) BACKEND="ngrok" ;;
+esac
+# ⚠️ 都可以用第一個參數直接指定
+case "$SKIP_ASK" in
+  --ngrok) BACKEND="ngrok"; SKIP_ASK="" ;;
+  --cloudflared|--cf) BACKEND="cloudflared"; SKIP_ASK="" ;;
+esac
 
 echo "════════════════════════════════════════════════════════════"
 echo "  Wander 對外開放"
@@ -96,21 +114,48 @@ EOF
 fi
 
 # ── ③ 起 tunnel ──
-echo "  起 tunnel…"
-LOG="$(mktemp -t wander-cf)"
-cloudflared tunnel --url "http://localhost:$PORT" --no-autoupdate >"$LOG" 2>&1 &
-CF_PID=$!
-trap 'kill $CF_PID 2>/dev/null || true' EXIT
+echo "  起 tunnel（${BACKEND}）…"
+LOG="$(mktemp -t wander-tunnel)"
 
-URL=""
-for _ in $(seq 1 40); do
-  sleep 1
-  URL="$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOG" 2>/dev/null | head -1 || true)"
-  [ -n "$URL" ] && break
-done
+if [ "$BACKEND" = "ngrok" ]; then
+  # ⚠️ ngrok 免費版有兩個問題：
+  #   ① 第一次喺瀏覽器開會出一個警告頁（要撳「Visit Site」）
+  #   ② 實測會撞 ERR_NGROK_802（agent 限制）—— 唔一定成功
+  if ! command -v ngrok >/dev/null 2>&1; then
+    echo "  ✗ 冇 ngrok"; exit 1
+  fi
+  ngrok http "$PORT" --log=stdout >"$LOG" 2>&1 &
+  CF_PID=$!
+  trap 'kill $CF_PID 2>/dev/null || true' EXIT
+  for _ in $(seq 1 40); do
+    sleep 1
+    URL="$(grep -oE 'https://[a-z0-9-]+\.ngrok[a-z.-]*' "$LOG" 2>/dev/null | head -1 || true)"
+    [ -n "$URL" ] && break
+    # ⚠️ 一見到 ERR_NGROK 就唔好再等
+    grep -q "ERR_NGROK" "$LOG" 2>/dev/null && break
+  done
+  if grep -q "ERR_NGROK" "$LOG" 2>/dev/null; then
+    echo "  ✗ ngrok 失敗："
+    grep -E "ERR_NGROK|ERROR" "$LOG" | head -3 | sed 's/^/      /'
+    echo
+    echo "  ⚠️ ngrok 免費版有 agent 限制（ERR_NGROK_802）"
+    echo "     改用 cloudflared（唔使註冊、唔使 authtoken）："
+    echo "         ./host.sh --cloudflared"
+    exit 1
+  fi
+else
+  cloudflared tunnel --url "http://localhost:$PORT" --no-autoupdate >"$LOG" 2>&1 &
+  CF_PID=$!
+  trap 'kill $CF_PID 2>/dev/null || true' EXIT
+  for _ in $(seq 1 40); do
+    sleep 1
+    URL="$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOG" 2>/dev/null | head -1 || true)"
+    [ -n "$URL" ] && break
+  done
+fi
 
-if [ -z "$URL" ]; then
-  echo "  ✗ 攞唔到公開網址。cloudflared 輸出："
+if [ -z "${URL:-}" ]; then
+  echo "  ✗ 攞唔到公開網址。輸出："
   tail -20 "$LOG"
   exit 1
 fi
