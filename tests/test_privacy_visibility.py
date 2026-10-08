@@ -436,10 +436,9 @@ class TestWallpaperDim:
         """
         s = (WEB / "components" / "WallpaperPicker.jsx").read_text(encoding="utf-8")
         i = s.index("async function saveDim(")
-        blk = s[i:i + 400]
-        assert "100 - clarityVal" in blk, "冇反轉（清晰度 → 暗罩）"
-        s2 = (WEB / "components" / "Wallpaper.jsx").read_text(encoding="utf-8")
-        assert "100 - clarity" in s2, "Wallpaper 冇反轉"
+        blk = s[i:i + 500]
+        # ⚠️ 反轉 + 曲線（見 TestClarityCurve）
+        assert "clarityToDim(" in blk, "冇反轉（清晰度 → 暗罩）"
 
     def test_slider_labels_inverted(self):
         """⚠️ UI 文字要反映：0% 黑色、100% 睇得最清。"""
@@ -623,3 +622,107 @@ class TestNoPresetRenderWithPhoto:
         i = css.index('body[data-wallpaper="1"] {')
         blk = css[i:i + 200]
         assert "background: #000" in blk, "主題底色冇換做黑"
+
+
+class TestClarityCurve:
+    """
+    ⚠️⚠️ 用戶報（第三次）：
+       「你會見到加咗上去之後個 wallpaper 仲係冇咁，
+        仲係有啲暗囉，如果我教到 100 之後」
+
+    ⚠️ 我量度過：**線性**映射嗰陣
+         清晰度 80% → 暗罩 0.29 → 淺灰 (200) 變 **144**（明顯變暗）
+         清晰度 90% → 暗罩 0.16 → 變 **172**
+
+    ✅ 改用**二次曲線**：`dim = ((100 - clarity) / 100)² × 100`
+         清晰度 100 → dim  0 → 200（完全清）
+         清晰度  90 → dim  1 → 197
+         清晰度  80 → dim  4 → 189
+         清晰度  50 → dim 25 → 130
+         清晰度   0 → dim 100 →   6（全黑）
+
+    ⚠️ 為咩唔喺 CSS 做：`calc()` 唔支援 `pow()`（支援未普及）。
+    """
+
+    def test_helpers_exist(self):
+        s = (WEB / "components" / "Wallpaper.jsx").read_text(encoding="utf-8")
+        assert "export function clarityToDim(" in s, "冇 clarityToDim"
+        assert "export function dimToClarity(" in s, "冇 dimToClarity"
+
+    def test_curve_is_quadratic(self):
+        """⚠️⚠️ 核心：一定要 **²** —— 唔係線性。"""
+        s = (WEB / "components" / "Wallpaper.jsx").read_text(encoding="utf-8")
+        i = s.index("export function clarityToDim(")
+        blk = s[i:i + 400]
+        assert "** 2" in blk, "唔係二次曲線"
+        assert "100 - c" in blk, "冇反轉"
+
+    def test_default_is_fully_clear(self):
+        """
+        ⚠️⚠️ 預設一定要 **100**（完全清）——
+           用戶明確話而家太暗，唔應該要佢自己調。
+        """
+        s = (WEB / "components" / "Wallpaper.jsx").read_text(encoding="utf-8")
+        assert "export const DEFAULT_CLARITY = 100" in s, \
+            "預設唔係 100（用戶一上載就會覺得暗）"
+
+    def test_curve_values(self):
+        """
+        ⚠️⚠️ **實測數學** —— 用 Python 重現同一條式，驗證關鍵值。
+        """
+        def c2d(c):
+            return round(((100 - c) / 100) ** 2 * 100)
+        assert c2d(100) == 0, "100% 唔係完全清"
+        assert c2d(90) <= 2, f"90% 暗罩太大: {c2d(90)}"
+        assert c2d(80) <= 5, f"80% 暗罩太大: {c2d(80)}"
+        assert c2d(50) <= 30, f"50% 暗罩太大: {c2d(50)}"
+        assert c2d(0) == 100, "0% 唔係全黑"
+        # ⚠️ 單調
+        vals = [c2d(c) for c in range(0, 101, 5)]
+        assert vals == sorted(vals, reverse=True), "唔係單調"
+
+    def test_brightness_improvement(self):
+        """
+        ⚠️⚠️ **量化驗證**：清晰度 80% 嗰陣，
+           淺灰 (200) 唔應該跌到 170 以下。
+        """
+        def c2d(c):
+            return round(((100 - c) / 100) ** 2 * 100)
+
+        def grey(clarity):
+            d = c2d(clarity)
+            # ⚠️ 上／下各自 clamp 先
+            t = min(1, d * 0.0131)
+            b = min(1, d * 0.0156)
+            return ((200 * (1 - t) + 6 * t) + (200 * (1 - b) + 6 * b)) / 2
+
+        assert grey(100) == 200, f"100% 應該係 200，而家 {grey(100):.0f}"
+        assert grey(90) >= 190, f"90% 太暗: {grey(90):.0f}"
+        assert grey(80) >= 180, f"80% 太暗: {grey(80):.0f}"
+        # ⚠️ 比舊版（線性）好
+        old80 = 144
+        assert grey(80) > old80 + 30, \
+            f"80% 冇改善（舊 {old80} → 新 {grey(80):.0f}）"
+
+    def test_roundtrip(self):
+        """⚠️ 讀返一定要準（唔可以每次讀都漂移）。"""
+        s = (WEB / "components" / "Wallpaper.jsx").read_text(encoding="utf-8")
+        assert "Math.sqrt" in s, "dimToClarity 冇用 sqrt（唔係二次嘅逆）"
+
+        def c2d(c):
+            return round(((100 - c) / 100) ** 2 * 100)
+
+        def d2c(d):
+            return round((1 - (d / 100) ** 0.5) * 100)
+
+        for c in [0, 25, 50, 70, 80, 90, 100]:
+            assert abs(d2c(c2d(c)) - c) <= 1, \
+                f"{c}% → dim {c2d(c)} → 讀返 {d2c(c2d(c))}%"
+
+    def test_no_linear_mapping_left(self):
+        """⚠️ 唔可以仲有線性 `100 - clarityVal`。"""
+        s = (WEB / "components" / "WallpaperPicker.jsx").read_text(encoding="utf-8")
+        body = re.sub(r"/\*[\s\S]*?\*/", "", s)
+        body = "\n".join(l.split("//")[0] for l in body.split("\n"))
+        assert "100 - clarityVal" not in body, "仲有線性映射"
+        assert "clarityToDim(" in body, "冇用曲線 helper"

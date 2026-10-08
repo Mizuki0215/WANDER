@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../lib/api'
 import { toast } from '../lib/ui'
-import { PRESETS, DEFAULT_CLARITY } from './Wallpaper'
+import { PRESETS, DEFAULT_CLARITY, clarityToDim, dimToClarity } from './Wallpaper'
 
 /**
  * 🖼 揀背景
@@ -23,7 +23,9 @@ export default function WallpaperPicker({ user, onChanged }) {
   //    ⚠️ UI 用**清晰度**（100 = 最清）——
   //       DB 存 `wallpaper_dim`（暗罩強度）→ 儲存時反轉。
   const [clarity, setClarity] = useState(
-    user?.wallpaper_dim == null ? DEFAULT_CLARITY : 100 - user.wallpaper_dim)
+    user?.wallpaper_dim == null
+      ? DEFAULT_CLARITY
+      : dimToClarity(user.wallpaper_dim))
   const curIsPhoto = (cur || '').startsWith('/uploads/')
 
   async function save(value) {
@@ -44,8 +46,9 @@ export default function WallpaperPicker({ user, onChanged }) {
    *      用 `onChange` 更新畫面（即時預覽）+ `onPointerUp` 才儲存。
    */
   async function saveDim(clarityVal) {
-    // ⚠️ 反轉：清晰度 100 → dim 0（冇暗罩）／清晰度 0 → dim 100（全黑）
-    const dimVal = 100 - clarityVal
+    // ⚠️⚠️ 清晰度 → 暗罩（**二次曲線**）——
+    //    唔可以用線性，唔係清晰度 80% 都會明顯變暗（實測 200 → 144）
+    const dimVal = clarityToDim(clarityVal)
     try {
       await api.setWallpaperDim(dimVal)
       onChanged?.({ wallpaper_dim: dimVal })
@@ -124,10 +127,12 @@ export default function WallpaperPicker({ user, onChanged }) {
             <span className="sub" style={{ fontSize: 9.5 }}>100% 睇得最清</span>
           </div>
           <div className="sub" style={{ fontSize: 10, marginTop: 6, lineHeight: 1.75 }}>
-            ⚠️ 調得太高（相太光），啲字可能會睇唔到。
+            ✅ <b>100% = 完全冇暗罩</b>（睇得最清）
             <br />
-            ✅ 高過 55% 我會自動加**文字陰影**幫你補救
-            （唔會遮住你張相）。
+            ⚠️ 調得太高（相太光），啲字可能會睇唔到 ——
+            我會自動加**文字陰影**補救（唔會遮住你張相）。
+            <br />
+            ⚠️ 曲線係**二次**嘅 —— 80% 以上幾乎唔覺暗。
           </div>
         </div>
       )}

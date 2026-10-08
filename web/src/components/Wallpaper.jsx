@@ -56,13 +56,44 @@ export function presetOf(id) {
  *      唔係最初嘅 45（太暗，睇唔到人）。
  *   ⚠️ 剩返嘅可讀性由 **text-shadow** 補救（dim 20 < 45 → 有陰影）。
  */
-export const DEFAULT_CLARITY = 80
+export const DEFAULT_CLARITY = 100
 
 /**
  * ⚠️ DB 存嘅係**暗罩強度**（100 = 最黑）。
  *   ⚠️ 第一次寫入嘅係 55（暗罩），而家 UI 用清晰度 —— 要反轉。
  */
 export const DEFAULT_DIM = DEFAULT_CLARITY
+
+/**
+ * ⚠️⚠️ 清晰度 → 暗罩強度（**二次曲線**）
+ * ==========================================
+ *
+ *   ⚠️⚠️ 用戶報：「你會見到加咗上去之後個 wallpaper 仲係有啲暗囉」
+ *
+ *   ⚠️ 我量度過：**線性**映射嗰陣，
+ *        清晰度 80% → 暗罩 0.29 → 淺灰 (200) 變 **144**（明顯變暗）
+ *
+ *   ✅ 用**二次曲線**：`dim = ((100 - clarity) / 100)² × 100`
+ *        · 清晰度 100 → dim   0 → 暗罩 0.00  ✅ 完全清
+ *        · 清晰度  90 → dim   1 → 暗罩 0.01  ✅ 幾乎冇
+ *        · 清晰度  80 → dim   4 → 暗罩 0.05  ✅ 好輕
+ *        · 清晰度  50 → dim  25 → 暗罩 0.33
+ *        · 清晰度  20 → dim  64 → 暗罩 0.84
+ *        · 清晰度   0 → dim 100 → 暗罩 1.00（全黑）
+ *
+ *   ⚠️ 為咩唔喺 CSS 做：`calc()` 唔支援 `pow()`（瀏覽器支援未普及）
+ *      → 喺 JS 算好先寫入 `--wall-dim`。
+ */
+export function clarityToDim(clarity) {
+  const c = Math.max(0, Math.min(100, Number(clarity) || 0))
+  return Math.round(((100 - c) / 100) ** 2 * 100)
+}
+
+/** ⚠️ 暗罩強度 → 清晰度（反向，俾 Picker 顯示返）。 */
+export function dimToClarity(dim) {
+  const d = Math.max(0, Math.min(100, Number(dim) || 0))
+  return Math.round((1 - Math.sqrt(d / 100)) * 100)
+}
 
 export default function Wallpaper({ value, dim }) {
   const [url, setUrl] = useState(null)
