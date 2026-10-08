@@ -81,3 +81,18 @@ server/wander.db-*
 **/*.sqlite3
 server/backup-*.db
 server/wander.backup-*.db
+
+# ══════════════════════════════════════════════════════════════
+# ⚠️⚠️ 憑證 / 工具 —— 絕對唔可以 commit
+# ══════════════════════════════════════════════════════════════
+# ⚠️ 2026-10-08 實測：`git add -A` 加咗 `.gh/hosts.yml`
+#    （**含 GitHub OAuth token**），好彩 GitHub 嘅 secret
+#    scanning 擋住咗個 push。
+#    ⚠️ 呢個係**我自己嘅錯** —— 冇將 .gh 加入 .gitignore。
+.gh/
+.gitconfig-wander
+.tools/
+.home/
+.chrome-data/
+.cd*/
+*.tgz

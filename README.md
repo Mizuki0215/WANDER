@@ -229,11 +229,34 @@ cd server && python -m app
 
 ### 部署
 
-| 方法 | 指令 |
-|---|---|
-| Fly.io（永久網址）| `./deploy.sh` |
-| 對外開放（臨時）| `./host.sh` |
-| 推上 GitHub | `./push-to-github.sh` |
+| 方法 | 成本 | 指令 |
+|---|---|---|
+| **☁️ Google Cloud（推薦）** | **$0/月永久** | 見 [GCP.md](GCP.md) |
+| 對外開放（臨時）| $0 | `./host.sh` |
+| Fly.io | US$3.44/月 | `./deploy.sh` |
+| 固定網址 tunnel | $0（要開電腦）| `./keep-tunnel.sh` |
+
+#### ⚠️ 為咩 GCP e2-micro 係最好
+
+```
+💰 $0/月（永久，唔係 trial）
+✅ 1 GB RAM + 2 vCPU + 30 GB 持久磁碟
+✅ 24/7，唔會 sleep
+✅ SQLite + 上載嘅相都留住
+⚠️ 要信用卡（但唔會收錢）
+```
+
+⚠️ **一鍵部署**（喺 Google Cloud Shell 貼）：
+```bash
+curl -fsSL https://raw.githubusercontent.com/Mizuki0215/WANDER/main/deploy-gcp.sh | bash
+```
+
+⚠️ **為咩唔用其他**：
+- **serveo / cloudflared** —— 要你部電腦開住（旅行時唔得）
+- **Fly.io** —— 2024-10-07 已取消免費 tier
+- **Render** —— 免費版**冇持久磁碟** → SQLite 每次重啟清空
+- **GitHub Pages** —— 只做靜態檔（冇 Python）
+- **Codespaces** —— 60 鐘/月（差 12 倍）
 
 ---
 
@@ -241,7 +264,8 @@ cd server && python -m app
 
 | 檔案 | 內容 |
 |---|---|
-| [DEPLOY.md](DEPLOY.md) | 部署（Fly.io / Codespaces / Docker）|
+| **[GCP.md](GCP.md)** | **☁️ 部署去 Google Cloud（$0 永久）** |
+| [DEPLOY.md](DEPLOY.md) | 其他部署（Fly.io / Codespaces / Docker）|
 | [HOSTING.md](HOSTING.md) | 所有 host 選擇 + 自訂 link 名 |
 | [DEVLOG.md](DEVLOG.md) | 開發日誌 —— 每個 bug 嘅根因同修法 |
 | [docs/smtp/](docs/smtp/) | 寄信設定（Gmail App Password 陷阱）|
