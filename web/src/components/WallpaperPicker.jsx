@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../lib/api'
 import { toast } from '../lib/ui'
-import { PRESETS, DEFAULT_DIM } from './Wallpaper'
+import { PRESETS, DEFAULT_CLARITY } from './Wallpaper'
 
 /**
  * 🖼 揀背景
@@ -18,9 +18,12 @@ import { PRESETS, DEFAULT_DIM } from './Wallpaper'
 export default function WallpaperPicker({ user, onChanged }) {
   const [cur, setCur] = useState(user?.wallpaper || '')
   const [busy, setBusy] = useState(false)
-  // ⚠️⚠️ 暗罩（用戶要求）—— 0 = 睇得最清，100 = 字最清
-  const [dim, setDim] = useState(
-    user?.wallpaper_dim == null ? DEFAULT_DIM : user.wallpaper_dim)
+  // ⚠️⚠️ 背景清晰度（用戶要求）
+  //    「嗰個槓桿應該 100% 係 show 得最清楚，0% 係黑色咁樣囉。」
+  //    ⚠️ UI 用**清晰度**（100 = 最清）——
+  //       DB 存 `wallpaper_dim`（暗罩強度）→ 儲存時反轉。
+  const [clarity, setClarity] = useState(
+    user?.wallpaper_dim == null ? DEFAULT_CLARITY : 100 - user.wallpaper_dim)
   const curIsPhoto = (cur || '').startsWith('/uploads/')
 
   async function save(value) {
@@ -40,10 +43,12 @@ export default function WallpaperPicker({ user, onChanged }) {
    *   ⚠️ 拖滑桿嗰陣**唔好**每個 pixel 都打 API ——
    *      用 `onChange` 更新畫面（即時預覽）+ `onPointerUp` 才儲存。
    */
-  async function saveDim(v) {
+  async function saveDim(clarityVal) {
+    // ⚠️ 反轉：清晰度 100 → dim 0（冇暗罩）／清晰度 0 → dim 100（全黑）
+    const dimVal = 100 - clarityVal
     try {
-      await api.setWallpaperDim(v)
-      onChanged?.({ wallpaper_dim: v })
+      await api.setWallpaperDim(dimVal)
+      onChanged?.({ wallpaper_dim: dimVal })
     } catch (e) { toast(e.message) }
   }
 
@@ -102,26 +107,26 @@ export default function WallpaperPicker({ user, onChanged }) {
       {curIsPhoto && (
         <div className="card" style={{ marginTop: 12, padding: '10px 12px' }}>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 800, fontSize: 12 }}>🌗 背景暗度</span>
+            <span style={{ fontWeight: 800, fontSize: 12 }}>☀️ 相片清晰度</span>
             <span className="mono" style={{ fontSize: 12, color: 'var(--cyan)' }}>
-              {dim}%
+              {clarity}%
             </span>
           </div>
           <input type="range" className="wall-slider" min="0" max="100" step="5"
-            value={dim}
-            onChange={e => setDim(Number(e.target.value))}
-            onPointerUp={() => saveDim(dim)}
-            onTouchEnd={() => saveDim(dim)}
-            onKeyUp={() => saveDim(dim)}
-            aria-label="背景暗度" />
+            value={clarity}
+            onChange={e => setClarity(Number(e.target.value))}
+            onPointerUp={() => saveDim(clarity)}
+            onTouchEnd={() => saveDim(clarity)}
+            onKeyUp={() => saveDim(clarity)}
+            aria-label="相片清晰度" />
           <div className="row" style={{ justifyContent: 'space-between' }}>
-            <span className="sub" style={{ fontSize: 9.5 }}>0% 睇得最清</span>
-            <span className="sub" style={{ fontSize: 9.5 }}>100% 字最清</span>
+            <span className="sub" style={{ fontSize: 9.5 }}>0% 黑色</span>
+            <span className="sub" style={{ fontSize: 9.5 }}>100% 睇得最清</span>
           </div>
           <div className="sub" style={{ fontSize: 10, marginTop: 6, lineHeight: 1.75 }}>
-            ⚠️ 調得太低，啲字可能會睇唔到。
+            ⚠️ 調得太高（相太光），啲字可能會睇唔到。
             <br />
-            ✅ 低過 45% 我會自動加**文字陰影**幫你補救
+            ✅ 高過 55% 我會自動加**文字陰影**幫你補救
             （唔會遮住你張相）。
           </div>
         </div>

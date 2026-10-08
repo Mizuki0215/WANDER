@@ -46,8 +46,23 @@ export function presetOf(id) {
  * ⚠️ 一定要放喺 `body::before` **之下**（z-index -1）——
  *    唔係嘅話會蓋住啲 card。
  */
-/** ⚠️ 暗罩預設值 —— 相上面要有暗罩，唔係啲字睇唔到。 */
-export const DEFAULT_DIM = 55
+/**
+ * ⚠️ 預設**清晰度**（0–100）。
+ *
+ *   ⚠️⚠️ 用戶要求：「嗰個槓桿應該 100% 係 show 得最清楚，
+ *      0% 係黑色」+「真係要完全擺上去要清晰」。
+ *
+ *   ⚠️ 所以預設 **80**（好清，睇到人樣）——
+ *      唔係最初嘅 45（太暗，睇唔到人）。
+ *   ⚠️ 剩返嘅可讀性由 **text-shadow** 補救（dim 20 < 45 → 有陰影）。
+ */
+export const DEFAULT_CLARITY = 80
+
+/**
+ * ⚠️ DB 存嘅係**暗罩強度**（100 = 最黑）。
+ *   ⚠️ 第一次寫入嘅係 55（暗罩），而家 UI 用清晰度 —— 要反轉。
+ */
+export const DEFAULT_DIM = DEFAULT_CLARITY
 
 export default function Wallpaper({ value, dim }) {
   const [url, setUrl] = useState(null)
@@ -69,9 +84,17 @@ export default function Wallpaper({ value, dim }) {
     //
     //    ⚠️ 只喺**有相**嗰陣先套用 —— preset 本身已經夠暗，
     //       再加暗罩會變全黑。
-    const d = isPhoto
-      ? Math.max(0, Math.min(100, Number(dim ?? DEFAULT_DIM) || 0))
-      : 0
+    // ⚠️⚠️ 用戶要求（第二次）：
+    //    「嗰個槓桿應該 100% 係 show 得最清楚，0% 係黑色咁樣囉。」
+    //
+    //    ⚠️ DB 存嘅係 `wallpaper_dim`（暗罩強度：100 = 最暗）,
+    //       但 UI 用「清晰度」—— 所以要**反轉**：
+    //         清晰度 100 → dim 0（完全冇暗罩，睇得最清）
+    //         清晰度 0   → dim 100（全黑）
+    const clarity = isPhoto
+      ? Math.max(0, Math.min(100, Number(dim ?? DEFAULT_CLARITY) || 0))
+      : 100
+    const d = isPhoto ? (100 - clarity) : 0
     el.style.setProperty('--wall-dim', String(d))
 
     // ⚠️⚠️ 暗罩薄嗰陣，字會睇唔到 —— 用**文字陰影**補救。

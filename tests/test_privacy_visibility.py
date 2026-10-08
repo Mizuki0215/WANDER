@@ -247,7 +247,7 @@ class TestWallpaper:
     def test_z_index_negative(self):
         """⚠️ 背景唔可以蓋住 app 內容。"""
         css = (WEB / "styles.css").read_text(encoding="utf-8")
-        i = css.index(".wallpaper-img")
+        i = css.index(".wallpaper-img {")
         blk = css[i:i + 300]
         assert "z-index: -2" in blk, "wallpaper-img z-index 唔係負"
 
@@ -427,6 +427,81 @@ class TestWallpaperDim:
         blk = s[i:i + 200]
         assert "0" in blk, "冇處理冇相嗰陣"
 
+    def test_slider_inverted(self):
+        """
+        ⚠️⚠️ 用戶要求（第二次）：
+           「嗰個槓桿應該 100% 係 show 得最清楚，0% 係黑色咁樣囉。」
+
+        ⚠️ DB 存 `wallpaper_dim`（暗罩強度）→ UI 用清晰度 → 要反轉。
+        """
+        s = (WEB / "components" / "WallpaperPicker.jsx").read_text(encoding="utf-8")
+        i = s.index("async function saveDim(")
+        blk = s[i:i + 400]
+        assert "100 - clarityVal" in blk, "冇反轉（清晰度 → 暗罩）"
+        s2 = (WEB / "components" / "Wallpaper.jsx").read_text(encoding="utf-8")
+        assert "100 - clarity" in s2, "Wallpaper 冇反轉"
+
+    def test_slider_labels_inverted(self):
+        """⚠️ UI 文字要反映：0% 黑色、100% 睇得最清。"""
+        s = (WEB / "components" / "WallpaperPicker.jsx").read_text(encoding="utf-8")
+        assert "0% 黑色" in s, "冇「0% 黑色」"
+        assert "100% 睇得最清" in s, "冇「100% 睇得最清」"
+        # ⚠️⚠️ 唔可以仲有舊嘅反向文字。
+        #    ⚠️ 但要小心：`"0% 睇得最清"` **係** `"100% 睇得最清"`
+        #       嘅子字串！（實測捉到假失敗）
+        #    ✅ 所以要連前面嘅 `>` 一齊比 —— `>0% 睇得最清` 先係真嘅。
+        assert ">0% 睇得最清" not in s, "仲有舊嘅反向文字"
+
+    def test_no_backdrop_filter_on_cards(self):
+        """
+        🚨🚨 用戶報：「scroll wallpaper 應該要做得再 smooth 啲…
+           你會見到佢無啦啦跳咗落去最低嗰度。」
+
+        ⚠️ 根因：`.card` / `.item` 加咗 `backdrop-filter: blur()`
+           —— 每次 scroll 都要重新計 blur，手機 GPU 頂唔順。
+
+        ✅ 一定要移除。
+        """
+        raw = (WEB / "styles.css").read_text(encoding="utf-8")
+        # ⚠️⚠️ 一定要**去 CSS 註解**先檢查 ——
+        #    我嘅解釋註解入面有 `backdrop-filter` 呢個字，
+        #    唔去就會 match 到自己（今日第 N 次中）。
+        css = re.sub(r"/\*[\s\S]*?\*/", "", raw)
+        for sel in [r"\.card\s*\{[^}]*\}", r"\.item\s*\{[^}]*\}"]:
+            for m in re.finditer(sel, css):
+                assert "backdrop-filter" not in m.group(0), \
+                    f"卡片仲有 backdrop-filter:\n{m.group(0)[:200]}"
+
+    def test_no_background_attachment_fixed(self):
+        """
+        ⚠️ iOS Safari 對 `background-attachment: fixed` 支援好差，
+           會令 scroll 跳格。要用 `position: fixed`。
+        """
+        raw = (WEB / "styles.css").read_text(encoding="utf-8")
+        # ⚠️ 去註解（我嘅解釋有 `background-attachment: fixed` 呢個字）
+        css = re.sub(r"/\*[\s\S]*?\*/", "", raw)
+        i = css.index(".wallpaper-img {")
+        blk = css[i:i + 400]
+        assert "background-attachment: fixed" not in blk, \
+            "仲用 background-attachment: fixed（iOS 會跳格）"
+        assert "position: fixed" in blk, "冇用 position: fixed"
+
+    def test_preset_glow_removed_with_photo(self):
+        """
+        ⚠️⚠️ 用戶要求：
+           「如果加自己嘅相上去嘅話呢，佢本身個背景呢就應該要
+            唔用佢囉，因為我見到如果我擺自己嘅相上去呢個
+            wallpaper 係會有原先預設咗嘅少少顏色囉。」
+
+        ⚠️ 「原先預設嘅顏色」= body::before 嘅三段光暈 + 主題底色。
+        ✅ 有相嗰陣兩個都要熄。
+        """
+        css = (WEB / "styles.css").read_text(encoding="utf-8")
+        assert 'body[data-wallpaper="1"] {' in css, "冇熄主題底色"
+        i = css.index('body[data-wallpaper="1"]::before')
+        blk = css[i:i + 200]
+        assert "opacity: 0" in blk, "冇熄光暈"
+
     def test_no_api_spam(self):
         """
         ⚠️⚠️ 拖滑桿唔可以每個 pixel 都打 API ——
@@ -437,4 +512,4 @@ class TestWallpaperDim:
         blk = s[i:i + 600]
         assert "onPointerUp" in blk, "冇喺放手先儲存"
         # ⚠️ onChange 唔應該直接 call API
-        assert "onChange={e => setDim(" in blk, "onChange 應該只更新畫面"
+        assert "onChange={e => setClarity(" in blk, "onChange 應該只更新畫面"

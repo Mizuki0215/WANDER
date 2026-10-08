@@ -1024,7 +1024,7 @@ input { outline: none; }
 /* ── 卡片：加返少少星雲透光感 ── */
 .card {
   background: color-mix(in srgb, var(--surface) 88%, transparent) !important;
-  backdrop-filter: blur(2px);
+  /* ⚠️⚠️ **冇** backdrop-filter —— 用戶報「scroll 唔順暢、無啦啦跳落最低」，根因就係每張卡都做 blur（手機 GPU 頂唔順）。✅ 淨用 alpha 就有同樣視覺，但便宜 10 倍。 */
 }
 /*   ⚠️ 只加 2px blur —— 唔係毛玻璃效果，
        只係令星雲背景唔會「拮穿」卡片睇落太花。 */
@@ -1499,37 +1499,47 @@ input { outline: none; }
    ⚠️ z-index 全部負數 —— 唔可以蓋住 app 內容。
 */
 .wallpaper-img {
+  /* ⚠️⚠️ 用 `position: fixed` 而**唔用** `background-attachment: fixed` ——
+     iOS Safari 對 `background-attachment: fixed` 支援好差，
+     會令 scroll 變到跳格（用戶報「無啦啦跳咗落去最低嗰度」）。
+     ⚠️ `position: fixed` 係 GPU layer，scroll 唔會重新繪製。 */
   position: fixed; inset: 0; z-index: -2;
   background-size: cover; background-position: center;
-  /* ⚠️ `fixed` 令背景唔跟 scroll（iOS 要 `background-attachment` 都寫）*/
-  background-attachment: fixed;
+  background-repeat: no-repeat;
+  /* ⚠️ 提示瀏覽器呢層唔會變 → 提升做獨立 layer */
+  will-change: transform;
+  contain: strict;
 }
 
-/* ⚠️⚠️ 暗罩（用戶可以調 0–100）
-   ────────────────────────────────
-   用戶要求：
-     「如果加一啲人嘅相呢，而家嘅透明度就會有啲低囉，
-      即係睇唔到人哋嘅人樣，可唔可以整一個吧上去 tune 佢，
-      由零透明度至到 100% 嘅透明度。」
+/* ⚠️⚠️ 暗罩（用戶可以調）
+   ────────────────────────
+   用戶要求（第二次調整）：
+     「嗰個槓桿應該 100% 係 show 得最清楚，0% 係黑色咁樣囉。」
 
-   ⚠️ `--wall-dim` 由 JS 寫入（0–100）→ 除 100 變 0–1。
+   ⚠️⚠️ 即係**反轉**：
+        · 100% = 睇得最清楚（完全冇暗罩）
+        · 0%   = 全黑
+
+   ⚠️ DB 仍然存 `wallpaper_dim`（暗罩強度，100 = 最暗）——
+      JS 用 `100 - 清晰度` 換算。咁樣唔使 migration。
+
+   ⚠️ `--wall-dim` 由 JS 寫入（0–100 暗罩強度）→ 乘數變 0–1。
    ⚠️ 分兩層：上半淺啲、下半深啲（下面通常有 nav 同文字）。
 */
 .wallpaper-scrim {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  /* ⚠️ 乘數校準：dim=55 要等於**舊版**嘅 0.72 / 0.86 ——
-        唔係嘅話用戶升級之後背景會突然變光／變暗。
+  /* ⚠️ 乘數校準：dim=55 要等於**最初版**嘅 0.72 / 0.86 ——
+        唔係嘅話背景會突然變光／變暗。
          · 上：0.72 / 55 = 0.0131
          · 下：0.86 / 55 = 0.0156
         ⚠️ dim=100 → 1.31 / 1.56，瀏覽器會 clamp 到 1（全黑）✓
-        ⚠️ dim=0   → 0（完全冇暗罩）✓ */
+        ⚠️ dim=0   → 0（完全冇暗罩，睇得最清）✓ */
   background:
     linear-gradient(180deg,
-      rgba(3, 1, 12, calc(var(--wall-dim, 55) * 0.0131))
+      rgba(4, 2, 14, calc(var(--wall-dim, 55) * 0.0131))
       0%,
-      rgba(3, 1, 12, calc(var(--wall-dim, 55) * 0.0156))
+      rgba(4, 2, 14, calc(var(--wall-dim, 55) * 0.0156))
       100%);
-  /* ⚠️ 暗罩越薄，字越難睇 —— 用 text-shadow 補救（見下面）*/
 }
 
 /* ⚠️⚠️ 暗罩薄嗰陣，用**文字陰影**令字仲睇得到。
@@ -1543,10 +1553,51 @@ body[data-wallpaper="1"] h4,
 body[data-wallpaper="1"] .h1 {
   text-shadow: var(--wall-shadow);
 }
+
+/* ⚠️⚠️⚠️ 用戶報：「scroll wallpaper 應該要做得再 smooth 啲，
+     你慢慢碌啦，應該可以由頭碌到落尾，因為我見到佢碌得
+     唔係太順暢，即係你會見到佢無啦啦跳咗落去最低嗰度。」
+
+     🚨 根因：我上一版喺 `.card` / `.item` 加咗
+        `backdrop-filter: blur(3px)` ——
+        ⚠️ 呢個係**極度耗效能**嘅 CSS，尤其係：
+          · 好多張卡（設定頁有 10+ 張）
+          · 手機 GPU 弱
+          · 每次 scroll 都要重新計 blur
+        → 直接令 scroll 變到卡下卡下、跳格。
+
+     ✅ 移除 backdrop-filter。
+        改為：卡片自己用半透明底（便宜好多，視覺差不多）。 */
 body[data-wallpaper="1"] .card,
 body[data-wallpaper="1"] .item {
-  /* ⚠️ 卡片加少少背景模糊 —— 相上面都睇得清 */
-  backdrop-filter: blur(3px);
+  /* ⚠️ 用 alpha 而唔用 blur —— 便宜 10 倍以上 */
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+body[data-wallpaper="1"] .screen {
+  background: transparent;
+}
+
+/* ⚠️⚠️ 用自己張相嗰陣，**唔要**原本嘅光暈（用戶要求）
+      「如果加自己嘅相上去嘅話呢，佢本身個背景呢就應該要唔用佢囉，
+       即係因為我而家見到如果我擺自己嘅相上去呢個 wallpaper
+       係會有原先預設咗嘅少少顏色囉。」
+
+      ⚠️ 兩個來源：
+        ① `body` 嘅 `background: var(--bg)`（主題底色）
+        ② `body::before` 嘅三段 radial-gradient 光暈（neon/cyan/pink）
+      ✅ 有相嗰陣兩個都熄。
+*/
+body[data-wallpaper="1"] {
+  /* ⚠️ 唔用主題底色 —— 用黑色打底，相片蓋上去就完全乾淨 */
+  background: #000;
+}
+body[data-wallpaper="1"]::before {
+  /* ⚠️ 熄光暈 —— 佢就係「原先預設咗嘅少少顏色」 */
+  opacity: 0;
+}
+body[data-wallpaper="1"]::after {
+  /* ⚠️ scanline 都減到好弱（保留少少質感，但唔阻住張相）*/
+  opacity: .28;
 }
 
 /* ⚠️ 調暗罩嘅滑桿 */
