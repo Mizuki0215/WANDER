@@ -162,7 +162,7 @@ if [ "$OLD" != "$REPO" ]; then
     -H "Authorization: Bearer $TOKEN" \
     "https://api.github.com/repos/$OWNER/$OLD")
   if [ "$OLDCODE" = "200" ]; then
-    echo "  ⚠️ 發現舊 repo「$OLD」→ 改名做「$REPO」？"
+    echo "  ⚠️ 發現舊 repo「${OLD}」→ 改名做「${REPO}」？"
     read -r -p "     改名？(Y/n)：" REN
     if [ "$REN" != "n" ] && [ "$REN" != "N" ]; then
       RRESP=$(curl -s --max-time 30 -X PATCH \
