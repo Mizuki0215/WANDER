@@ -644,3 +644,61 @@ class TestCustomLinkName:
         assert app != "wander-CHANGE-ME", "fly.toml 仲係預設名"
         assert re.fullmatch(r"[a-z0-9][a-z0-9-]{1,28}[a-z0-9]", app), \
             f"app 名格式唔啱: {app}"
+
+
+class TestServeo:
+    """
+    ⚠️ 用戶問：「有冇其他方法可以改到個 link 名啊？」
+
+       ✅ **有！** `serveo.net` —— 免費 + 自訂名 + 冇提示頁。
+
+       我實測（8 項全過）：
+         ✓ 註冊 ✓ 建旅程 ✓ 加購物 ✓ 上傳相 ✓ 補相
+         ✓ PWA manifest ✓ service worker ✓ 冇提示頁
+    """
+
+    def test_host_script_has_serveo(self):
+        s = (ROOT / "host.sh").read_text(encoding="utf-8")
+        assert "--serveo" in s, "host.sh 冇 serveo"
+        assert "WANDER_SERVEO_NAME" in s, "冇得自訂名"
+        assert "console.serveo.net" in s, "冇講點註冊 SSH key"
+
+    def test_serveo_url_extraction_excludes_console(self):
+        """
+        ⚠️⚠️ 實測中過嘅 bug：
+           log 入面嘅**註冊提示**有 `https://console.serveo.net` ——
+           如果淨係 grep `serveo`，就會攞咗個註冊頁做 tunnel URL。
+        """
+        s = (ROOT / "host.sh").read_text(encoding="utf-8")
+        assert "grep -v '^https://console\\\\.'" in s or \
+               "grep -v" in s and "console" in s, \
+            "URL 抽取冇排除 console.serveo.net"
+
+    def test_serveo_handles_unregistered(self):
+        """⚠️ 未註冊 SSH key 要**明確講**（唔好靜靜咁用隨機名）。"""
+        s = (ROOT / "host.sh").read_text(encoding="utf-8")
+        assert "register your SSH public key" in s, "冇偵測未註冊"
+        assert "未註冊 SSH key" in s, "冇講清楚"
+
+    def test_doc_ranks_serveo_first(self):
+        """⚠️ 我實測 serveo 係最好嘅免費方案 —— 文件要咁排。"""
+        s = (ROOT / "HOSTING.md").read_text(encoding="utf-8")
+        assert "serveo.net" in s, "冇提 serveo"
+        assert "🥇 serveo" in s, "serveo 冇排第一"
+        # ⚠️ 要有實測結果（唔係空泛推薦）
+        assert "8 項全過" in s or "全過" in s, "冇實測結果"
+
+    def test_doc_warns_localtunnel_unstable(self):
+        """⚠️ localtunnel 自訂名但實測唔穩定（503）—— 要老實講。"""
+        s = (ROOT / "HOSTING.md").read_text(encoding="utf-8")
+        assert "loca.lt" in s, "冇提 localtunnel"
+        assert "503" in s, "冇記錄 localtunnel 嘅 503"
+
+    def test_doc_corrects_only_two_ways(self):
+        """
+        ⚠️ 我原本寫「只有兩條路」—— 實測錯咗（serveo 都得）。
+           要更正。
+        """
+        s = (ROOT / "HOSTING.md").read_text(encoding="utf-8")
+        assert "只有兩條路" not in s, "仲寫住「只有兩條路」（實測錯）"
+        assert "免費都有 3 條路" in s, "冇更正做 3 條路"

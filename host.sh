@@ -13,6 +13,9 @@
 # 用法：
 #     ./host.sh                  # cloudflared（推薦，唔使註冊）
 #     ./host.sh --cloudflared    # 同上
+#     ./host.sh --serveo         # ✅ serveo（可以自訂名 + 免費 + 冇提示頁）
+#     WANDER_SERVEO_NAME=wander-mizuki ./host.sh --serveo
+#                                # → https://wander-mizuki.serveo.net
 #     ./host.sh --ngrok          # ngrok（⚠️ 免費版唔穩定）
 #     WANDER_NGROK_DOMAIN=你個名.ngrok-free.app ./host.sh --ngrok
 #                                # ⚠️⚠️ 但 ngrok **免費版唔准自訂**
@@ -40,10 +43,12 @@ SKIP_ASK="${1:-}"
 BACKEND="cloudflared"
 case "${2:-${WANDER_TUNNEL:-cloudflared}}" in
   ngrok) BACKEND="ngrok" ;;
+  serveo) BACKEND="serveo" ;;
 esac
 # ⚠️ 都可以用第一個參數直接指定
 case "$SKIP_ASK" in
   --ngrok) BACKEND="ngrok"; SKIP_ASK="" ;;
+  --serveo) BACKEND="serveo"; SKIP_ASK="" ;;
   --cloudflared|--cf) BACKEND="cloudflared"; SKIP_ASK="" ;;
 esac
 
@@ -120,7 +125,63 @@ fi
 echo "  起 tunnel（${BACKEND}）…"
 LOG="$(mktemp -t wander-tunnel)"
 
-if [ "$BACKEND" = "ngrok" ]; then
+if [ "$BACKEND" = "serveo" ]; then
+  # ══════════════════════════════════════════════════════════════
+  # ✅ serveo.net —— **免費 + 可以自訂 link 名**
+  # ══════════════════════════════════════════════════════════════
+  #
+  # ⚠️⚠️ 為咩推薦：
+  #   實測全部 200、**冇提示頁**、API 直接用得，
+  #   而且可以自訂 subdomain（`你揀.serveo.net`）。
+  #
+  # ⚠️ 自訂名要先註冊 SSH public key（免費，用 Google/GitHub 登入）：
+  #      ssh-keygen -lf ~/.ssh/id_ed25519.pub     # 攞 fingerprint
+  #      → 去 https://console.serveo.net/ 註冊
+  #   ⚠️ 未註冊 → 照樣有 link，但係**隨機名**
+  NAME="${WANDER_SERVEO_NAME:-}"
+  if [ -n "$NAME" ]; then
+    echo "  用自訂名：$NAME.serveo.net"
+    ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=20 \
+        -R "$NAME:80:localhost:$PORT" serveo.net >"$LOG" 2>&1 &
+  else
+    echo "  ⚠️ 冇設 WANDER_SERVEO_NAME → 用隨機名"
+    echo "     想自訂：WANDER_SERVEO_NAME=wander-mizuki ./host.sh --serveo"
+    ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=20 \
+        -R "80:localhost:$PORT" serveo.net >"$LOG" 2>&1 &
+  fi
+  CF_PID=$!
+  trap 'kill $CF_PID 2>/dev/null || true' EXIT
+  for _ in $(seq 1 40); do
+    sleep 1
+    # ⚠️⚠️ 唔可以淨係 grep `serveo` ——
+    #    個 log 入面嘅**註冊提示**有 `https://console.serveo.net`，
+    #    會令 URL 變咗個註冊頁（實測中過）。
+    #    ✅ 只接受兩種真 tunnel URL：
+    #       · 自訂名：`https://你揀.serveo.net`（但唔可以係 console.*）
+    #       · 隨機名：`https://xxxx.serveousercontent.com`
+    URL="$(grep -oE 'https://[a-z0-9-]+\.(serveo\.net|serveousercontent\.com)' "$LOG" 2>/dev/null \
+           | grep -v '^https://console\.' | head -1 || true)"
+    [ -n "$URL" ] && break
+    # ⚠️ 見到「未註冊」嘅提示就唔好再等
+    grep -q "register your SSH public key" "$LOG" 2>/dev/null && break
+  done
+  if grep -q "register your SSH public key" "$LOG" 2>/dev/null; then
+    echo
+    echo "  ⚠️⚠️ serveo 話你**未註冊 SSH key** → 只能夠用隨機名"
+    echo
+    echo "  ✅ 想自訂 link 名（免費，3 步）："
+    echo "     ① 攞你嘅 SSH fingerprint："
+    echo "          ssh-keygen -lf ~/.ssh/id_ed25519.pub"
+    FP="$(ssh-keygen -lf "$HOME/.ssh/id_ed25519.pub" 2>/dev/null | awk '{print $2}' || true)"
+    [ -n "${FP:-}" ] && echo "        你嘅：$FP"
+    echo "     ② 去呢度用 Google / GitHub 登入（30 秒）："
+    echo "         https://console.serveo.net/"
+    echo "     ③ 再跑："
+    echo "         WANDER_SERVEO_NAME=wander-mizuki ./host.sh --serveo"
+    echo
+    echo "  ⚠️ 但而家照樣有 link（隨機名）—— 下面係："
+  fi
+elif [ "$BACKEND" = "ngrok" ]; then
   # ⚠️ ngrok 免費版有兩個問題：
   #   ① 第一次喺瀏覽器開會出一個警告頁（要撳「Visit Site」）
   #   ② 實測會撞 ERR_NGROK_802（agent 限制）—— 唔一定成功
@@ -193,8 +254,21 @@ else
 fi
 
 if [ -z "${URL:-}" ]; then
-  echo "  ✗ 攞唔到公開網址。輸出："
-  tail -20 "$LOG"
+  echo "  ✗ 攞唔到公開網址。"
+  # ⚠️ 特別處理 serveo 未註冊嘅情況（唔好印個 console URL 當 tunnel）
+  if grep -q "register your SSH public key" "$LOG" 2>/dev/null; then
+    echo
+    echo "  ⚠️ serveo 未註冊 SSH key → 連隨機名都攞唔到。"
+    echo "     去 https://console.serveo.net/ 用 Google/GitHub 登入（30 秒），"
+    echo "     然後再跑："
+    echo "         WANDER_SERVEO_NAME=wander-mizuki ./host.sh --serveo"
+    echo
+    echo "  ✅ 或者即刻用 cloudflared（唔使註冊）："
+    echo "         ./host.sh --cloudflared"
+  else
+    echo "  tunnel 輸出："
+    tail -12 "$LOG" | sed 's/^/      /'
+  fi
   exit 1
 fi
 echo "  ✓ $URL"

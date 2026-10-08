@@ -15,32 +15,83 @@ known-ideal-arizona-highlight.trycloudflare.com
 cloudflare 隨機派，冇任何參數可以指定
 ```
 
-### ✅ 想要自訂名 → **只有兩條路**
+### ✅ 想要自訂名 → **免費都有 3 條路！**
 
-| 方法 | 你會拿到 | 成本 | 可以自訂？ |
-|---|---|---|---|
-| **Fly.io** | `你揀嘅名.fly.dev` | 要綁卡（唔收錢）| ✅ **你揀** |
-| **買網域 + named tunnel** | `wander.你個名.com` | ~US$1-10/**年** | ✅ **你揀** |
+| 方法 | 你會拿到 | 成本 | 穩定？ | 提示頁？ |
+|---|---|---|---|---|
+| **serveo.net** ⭐ | `你揀.serveo.net` | **免費** | ✅ 好 | ✅ 冇 |
+| **localtunnel** | `你揀.loca.lt` | **免費** | ⚠️ 差 | ⚠️ 有 |
+| **Fly.io** | `你揀.fly.dev` | 要綁卡 | ✅ 最好 | ✅ 冇 |
+| **買網域** | `wander.你個名.com` | ~US$1-10/年 | ✅ 最好 | ✅ 冇 |
 
-### ❌ 實測：呢啲**都改唔到名**
+#### 🥇 serveo.net（我實測最好嘅免費方案）
 
-| 方法 | 為咩 |
-|---|---|
-| **cloudflared quick** | cloudflare 隨機派，冇參數可以指定 |
-| **ngrok 免費版** | ⚠️⚠️ 實測 `ERR_NGROK_313`：<br>`Only paid plans may create endpoints with custom subdomains`<br>→ 免費版只有一個**隨機** static domain |
+```bash
+WANDER_SERVEO_NAME=wander-mizuki ./host.sh --serveo
+# → https://wander-mizuki.serveo.net
+```
 
-⚠️⚠️ **我原本以為 ngrok 免費版可以自訂，實測錯咗** ——
-   佢連 static domain 個名都係自動生成，唔可以揀。
-   （要付費 plan 先可以自訂 subdomain。）
+⚠️ **要自訂名，先註冊你嘅 SSH key**（免費，30 秒）：
+```bash
+# ① 攞你嘅 fingerprint
+ssh-keygen -lf ~/.ssh/id_ed25519.pub
+#   你嘅：SHA256:4afxDvFpjd7uYyKrj9mmJDv5yINnE4eLLSBOfaQFiZI
 
-#### ① Fly.io（最實際，要綁卡）
+# ② 去呢度用 Google / GitHub 登入
+open https://console.serveo.net/
+
+# ③ 再跑
+WANDER_SERVEO_NAME=wander-mizuki ./host.sh --serveo
+```
+
+⚠️ **未註冊都可以用** —— 但係**隨機名**（`xxxx.serveousercontent.com`）。
+
+**我實測 serveo（8 項全過）：**
+```
+✓ 註冊   ✓ 建旅程   ✓ 加購物   ✓ 上傳相   ✓ 補相
+✓ PWA manifest   ✓ service worker
+✓ 冇提示頁（同 localtunnel 唔同）
+```
+
+#### ⚠️ localtunnel（自訂名但唔穩定）
+
+```bash
+npx localtunnel --port 8787 --subdomain wander-mizuki
+# → https://wander-mizuki.loca.lt
+```
+⚠️ 我實測：
+```
+第一次：✓ https://wander-mizuki.loca.lt  → 200
+第二次：✗ 503 Tunnel Unavailable
+```
+→ 而且瀏覽器第一次開有**密碼提示頁**。
+→ 唔建議認真用。
+
+#### ⚠️ ngrok 免費版 —— **改唔到名**（實測）
+
+```
+ERR_NGROK_313: Only paid plans may create endpoints with
+custom subdomains. This account is on the 'Free' plan.
+```
+
+⚠️⚠️ 我原本以為 ngrok 免費版可以自訂 subdomain —— **實測錯咗**。
+   免費版只有一個**隨機** static domain（`xxxx-yyyy.ngrok-free.app`），
+   名唔可以揀。要**付費 plan** 先可以自訂。
+
+⚠️ 而且免費版仲有兩個問題：
+   · 瀏覽器第一次開有**警告頁**（要撳「Visit Site」）
+   · 實測會撞 `ERR_NGROK_802`（agent 限制，間歇性）
+
+→ 所以想要自訂名，**用 serveo 唔好用 ngrok**。
+
+#### 🥈 Fly.io（最穩定，要綁卡）
 
 ```bash
 ./deploy.sh        # app 名 = wander-mizuki → https://wander-mizuki.fly.dev
 ```
 ⚠️ app 名要**全球唯一**，但你可以揀（改 `fly.toml` 第一行）
 
-#### ② 買網域（最靚，永久）
+#### 🥉 買網域（最靚，永久）
 
 ```bash
 cloudflared tunnel login
