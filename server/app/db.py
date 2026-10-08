@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS users (
     avatar       TEXT,
     password_hash TEXT,
     theme        TEXT DEFAULT 'galaxy',
+    -- ⚠️ 自訂 wallpaper（用戶要求）—— `/uploads/xxx.jpg` 或 preset key
+    wallpaper    TEXT,
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -113,6 +115,11 @@ CREATE TABLE IF NOT EXISTS items (
     -- 行程編排
     day_index   INTEGER,                           -- NULL = 未排入行程
     sort_order  INTEGER NOT NULL DEFAULT 0,
+    -- ⚠️⚠️ public／private（用戶要求）
+    --    「Save 低嘅景點應該分 public 同 Private。
+    --      Public = 全 group 見到，Private = 得自己睇到。」
+    --    ⚠️ 預設 `private`（唔會唔小心泄漏用戶嘅收藏）
+    visibility  TEXT DEFAULT 'private',
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_items_trip ON items(trip_id);
@@ -165,6 +172,8 @@ CREATE TABLE IF NOT EXISTS shopping_items (
     done       INTEGER NOT NULL DEFAULT 0,
     position   INTEGER NOT NULL DEFAULT 0,
     created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    -- ⚠️ 私人／全組（用戶要求）—— 預設 `private`（自己睇）
+    visibility TEXT DEFAULT 'private',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -242,6 +251,24 @@ MIGRATIONS: list[tuple[str, str, str]] = [
     ("shopping_items", "currency", "TEXT"),
     # ⚠️ 旅程嘅「記帳貨幣」—— 總額用呢個顯示（通常 HKD）
     ("trips", "currency", "TEXT"),
+    # ⚠️⚠️ 自訂 wallpaper（用戶要求）
+    #    「我哋整一個 function 就係改 wallpaper？…另外就係有個選項
+    #     就係加咁樣嘅選項啦…可以自訂 wallpaper 咁然後你就可以
+    #     加返自己嘅相上去。」
+    #    ⚠️ 存 `/uploads/xxx.jpg`（自己上載）或者 preset key
+    #      （`galaxy` / `none` …）—— 兩種都用同一欄位。
+    ("users", "wallpaper", "TEXT"),
+    # ⚠️⚠️ 購物清單**私人**（用戶要求）
+    #    「shopping list 係自己嘅，就算人哋加落去加咗落去呢個
+    #      planner 度呢，佢哋應該係睇唔到嘅。」
+    #    ⚠️ 值：`private`（預設，只有自己）／`group`（全組睇到）
+    ("shopping_items", "visibility", "TEXT"),
+    # ⚠️⚠️ 收藏景點 public／private（用戶要求）
+    #    「你 Save 低嘅景點呢應該有分可以分作 public 同埋 Private。
+    #      Public 就係大家喺呢個 group 裏面嘅都見到，
+    #      而 Private 就係得自己睇到呢一張。」
+    #    ⚠️ 值：`private`（預設）／`public`
+    ("items", "visibility", "TEXT"),
     ("items", "day_index", "INTEGER"),
 ]
 
@@ -347,6 +374,12 @@ def item_row_to_api(row: sqlite3.Row, *, viewer_id: str | None = None) -> dict[s
         "day_index": row["day_index"],
         "sort_order": row["sort_order"],
         "created_at": row["created_at"],
+        # ⚠️⚠️ 可見度（用戶要求）—— 前端要顯示鎖／地球圖示
+        #    ⚠️ 舊 row 可能係 NULL → 當 `private`（安全預設）
+        "visibility": (row["visibility"] or "private") if "visibility" in row.keys() else "private",
+        # ⚠️ 前端要知「呢項係唔係我加嘅」→ 決定可唔可以改可見度
+        "mine": (row["created_by"] == viewer_id) if viewer_id else None,
+        "created_by": row["created_by"] if "created_by" in row.keys() else None,
     })
     return out
 

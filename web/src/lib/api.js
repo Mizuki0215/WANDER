@@ -209,6 +209,12 @@ export const api = {
   myQr: () => req('GET', '/api/me/qr'),
   decodeQr: (data) => req('POST', '/api/qr/decode', { body: { data } }),
 
+  // ⚠️⚠️ 私隱（用戶要求）
+  //    · 購物清單：預設 private（自己睇），可以 group（全組）
+  //    · 收藏景點：預設 private，可以 public
+  setItemVisibility: (itemId, visibility) =>
+    req('PATCH', `/api/item/${itemId}/visibility`, { body: { visibility } }),
+
   zones: (id, days) => req('GET', `/api/trips/${id}/zones`, { params: days ? { days } : {} }),
   listShopping: (id) => req('GET', `/api/trips/${id}/shopping`),
   addShopping: (id, body) => req('POST', `/api/trips/${id}/shopping`, { body }),
@@ -225,6 +231,8 @@ export const api = {
   upload: (data) => req('POST', '/api/upload', {
     body: { data }, timeout: UPLOAD_TIMEOUT_MS,
   }),
+  /** ⚠️ 自訂背景（用戶要求）—— `/uploads/x.jpg` 或 preset key，空字串 = 清走 */
+  setWallpaper: (wallpaper) => req('PATCH', '/api/me', { body: { wallpaper } }),
   setPassword: (password, current) => req('POST', '/api/me/password', { body: { password, current } }),
   listExpenses: (id) => req('GET', `/api/trips/${id}/expenses`),
   addExpense: (id, body) => req('POST', `/api/trips/${id}/expenses`, { body }),

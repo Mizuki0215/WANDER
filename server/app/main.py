@@ -256,13 +256,44 @@ SHOP_CATS = ("food", "souvenir", "drug", "cloth", "electronics", "other")
 
 
 @app.get("/api/trips/{trip_id}/shopping")
-def list_shopping(trip_id: str, user: dict = Depends(current_user)) -> dict:
+def list_shopping(trip_id: str, user: dict = Depends(current_user),
+                  all: int = 0) -> dict:
+    """
+    購物清單。
+
+    ⚠️⚠️ 用戶要求（私人清單）：
+       「shopping list 係自己嘅，就算人哋加落去加咗落去呢個
+         planner 度呢，佢哋應該係睇唔到嘅。」
+
+    ⚠️ 預設只回：
+       ① 我**自己加**嘅（`created_by = 我`）
+       ② **指派畀我**嘅（`assignee = 我嘅名`）—— 唔係嘅話
+          朋友叫你買嘢你反而睇唔到
+       ③ 標記做 `group`（全組共用）嘅
+
+    ⚠️ `all=1` 可以睇晒全組（要**明確要求**，唔會預設泄漏）。
+    """
     _require_member(trip_id, user["id"])
+    me_name = (user.get("display_name") or "").strip()
     with db.connect() as conn:
-        rows = conn.execute(
-            """SELECT * FROM shopping_items WHERE trip_id = ?
-               ORDER BY done, position, created_at""", (trip_id,)).fetchall()
+        if all:
+            rows = conn.execute(
+                """SELECT * FROM shopping_items WHERE trip_id = ?
+                   ORDER BY done, position, created_at""", (trip_id,)).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT * FROM shopping_items
+                   WHERE trip_id = ?
+                     AND (created_by = ?
+                          OR visibility = 'group'
+                          OR (assignee IS NOT NULL AND trim(assignee) = ?))
+                   ORDER BY done, position, created_at""",
+                (trip_id, user["id"], me_name)).fetchall()
     items = [db.row_to_dict(r) for r in rows]
+    # ⚠️ 前端要知「呢項係唔係我加嘅」→ 決定可唔可以改可見度
+    for x in items:
+        x["mine"] = (x.get("created_by") == user["id"])
+        x["visibility"] = x.get("visibility") or "private"
 
     # ⚠️⚠️ 用戶要求：「根據匯率去轉返嗰個你想要嘅錢」
     #
@@ -334,17 +365,21 @@ def add_shopping(trip_id: str, body: dict, user: dict = Depends(current_user)) -
         #    → 每項都可以有**自己嘅貨幣**。
         #    ⚠️ 空 = 用旅程嘅記帳貨幣（唔係硬編碼 HKD）。
         cur_code = (body.get("currency") or "").strip().upper() or None
+        # ⚠️ 私人／共用（用戶要求）
+        vis = (body.get("visibility") or "private").strip().lower()
+        if vis not in ("private", "group"):
+            vis = "private"
         conn.execute(
             """INSERT INTO shopping_items
                (id, trip_id, title, qty, note, category, assignee, price, position,
-                created_by, image, currency)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                created_by, image, currency, visibility)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (sid, trip_id, title, (body.get("qty") or "").strip(),
              (body.get("note") or "").strip(),
              (body.get("category") or "other").strip(),
              (body.get("assignee") or "").strip(),
              body.get("price"), n, user["id"],
-             (body.get("image") or "").strip() or None, cur_code))
+             (body.get("image") or "").strip() or None, cur_code, vis))
         row = conn.execute("SELECT * FROM shopping_items WHERE id=?", (sid,)).fetchone()
     return {"item": db.row_to_dict(row)}
 
@@ -379,6 +414,22 @@ def update_shopping(item_id: str, body: dict,
         fields.append("done=?"); vals.append(1 if body["done"] else 0)
     if "position" in body:
         fields.append("position=?"); vals.append(int(body["position"] or 0))
+    # ⚠️⚠️ 私人／共用（用戶要求）
+    #    「shopping list 係自己嘅，就算人哋加落去…佢哋應該係睇唔到嘅。」
+    #    ⚠️ 一定要驗值 —— 唔可以任人寫（否則 `visibility='public'`
+    #       會令私人清單突然全世界見到）。
+    if "visibility" in body and body["visibility"] is not None:
+        v = str(body["visibility"]).strip().lower()
+        if v not in ("private", "group"):
+            raise HTTPException(400, "只可以係 private 或者 group")
+        # ⚠️⚠️ 只有**加嗰個人**可以改自己嗰項嘅可見度 ——
+        #    唔可以將朋友嘅私人清單變成共用（咁係泄漏）。
+        with db.connect() as conn2:
+            owner = conn2.execute(
+                "SELECT created_by FROM shopping_items WHERE id=?", (item_id,)).fetchone()
+        if owner and owner["created_by"] and owner["created_by"] != user["id"]:
+            raise HTTPException(403, "只有加嗰個人可以改呢項嘅可見度")
+        fields.append("visibility=?"); vals.append(v)
     if not fields:
         raise HTTPException(400, "冇嘢改")
     vals.append(item_id)
@@ -1270,6 +1321,8 @@ def me(user: dict = Depends(current_user)) -> dict:
             "display_name": user.get("display_name"),
             "avatar": user.get("avatar"),
             "theme": user.get("theme"),
+            # ⚠️ 自訂 wallpaper（用戶要求）
+            "wallpaper": user.get("wallpaper"),
             "onboarded": bool(user.get("onboarded")),
             # ⚠️⚠️ 用戶報嘅 bug：
             #   「我個帳號本身係 set 咗一個密碼嘅，所以呢你去改密碼
@@ -1380,7 +1433,9 @@ class UpdateMe(BaseModel):
     username: Optional[str] = None
     display_name: Optional[str] = None
     theme: Optional[str] = None
-
+    # ⚠️ 自訂背景（用戶要求）—— `/uploads/xxx.jpg` 或 preset key
+    #    ⚠️ 空字串 = 清走（返返去預設）
+    wallpaper: Optional[str] = Field(default=None, max_length=200)
 
 @app.post("/api/me/onboard")
 def finish_onboarding(body: OnboardIn, user: dict = Depends(current_user)) -> dict:
@@ -1415,6 +1470,20 @@ def update_me(body: UpdateMe, user: dict = Depends(current_user)) -> dict:
         fields.append("display_name = ?"); vals.append(body.display_name.strip()[:40])
     if body.theme is not None:
         fields.append("theme = ?"); vals.append(body.theme.strip()[:20])
+    if getattr(body, "wallpaper", None) is not None:
+        w = (body.wallpaper or "").strip()
+        # ⚠️⚠️ 只准兩種值：
+        #    ① `/uploads/xxx.ext` —— 自己上載（由 /api/upload 產生）
+        #    ② preset key —— 內建背景（例如 `galaxy`）
+        #    ⚠️ 一定唔可以任人寫入任意字串 —— 會變成
+        #       `background-image: url(javascript:...)` 之類嘅注入。
+        import re as _re2
+        if w and not (
+            _re2.fullmatch(r"/uploads/[A-Za-z0-9_-]{8,}\.(jpg|png|webp)", w)
+            or _re2.fullmatch(r"[a-z][a-z0-9_-]{0,19}", w)
+        ):
+            raise HTTPException(400, "背景格式唔啱")
+        fields.append("wallpaper = ?"); vals.append(w or None)
     if body.avatar is not None:
         av = body.avatar.strip()
         if av and av not in AVATAR_IDS:
@@ -1736,14 +1805,39 @@ def join_trip(invite_code: str, user: dict = Depends(current_user)) -> dict:
 
 
 @app.get("/api/trips/{trip_id}/items")
-def list_items(trip_id: str, user: dict = Depends(current_user)) -> dict:
+def list_items(trip_id: str, user: dict = Depends(current_user),
+               all: int = 0) -> dict:
+    """
+    收藏景點清單。
+
+    ⚠️⚠️ 用戶要求（public／private）：
+       「你 Save 低嘅景點呢應該有分可以分作 public 同埋 Private。
+         Public 就係大家喺呢個 group 裏面嘅都見到，
+         而 Private 就係得自己睇到呢一張。」
+
+    ⚠️ 預設只回：
+       · `visibility = 'public'`（全組共用）
+       · **我自己**加嘅（private 都見到自己嗰啲）
+       ⚠️ `all=1` = 睇晒（admin debug 用）
+    """
     _require_member(trip_id, user["id"])
     with db.connect() as conn:
-        rows = conn.execute(
-            "SELECT * FROM items WHERE trip_id = ? ORDER BY sort_order, created_at",
-            (trip_id,),
-        ).fetchall()
-    return {"items": [db.item_row_to_api(r) for r in rows]}
+        if all:
+            rows = conn.execute(
+                "SELECT * FROM items WHERE trip_id = ? ORDER BY sort_order, created_at",
+                (trip_id,)).fetchall()
+        else:
+            # ⚠️ `COALESCE(visibility,'private')` ——
+            #    舊 row 係 NULL（migration 之前加嘅），當 private。
+            #    ⚠️ 但舊 row 係「用戶自己嗰啲」→ created_by = 我 就見到 ✓
+            rows = conn.execute(
+                """SELECT * FROM items
+                   WHERE trip_id = ?
+                     AND (COALESCE(visibility, 'private') = 'public'
+                          OR created_by = ?)
+                   ORDER BY sort_order, created_at""",
+                (trip_id, user["id"])).fetchall()
+    return {"items": [db.item_row_to_api(r, viewer_id=user["id"]) for r in rows]}
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1932,13 +2026,16 @@ def create_item(trip_id: str, parsed: dict, user: dict = Depends(current_user)) 
         ).fetchone()["n"]
         conn.execute(
             """INSERT INTO items (id, trip_id, created_by, parsed, name, category,
-                                  country, district, lat, lng, confidence, needs_review, sort_order)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                  country, district, lat, lng, confidence, needs_review,
+                                  sort_order, visibility)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (iid, trip_id, user["id"], json.dumps(parsed, ensure_ascii=False),
              parsed.get("name"), parsed.get("category"), parsed.get("country"),
              parsed.get("district"), parsed.get("lat"), parsed.get("lng"),
              int(parsed.get("confidence") or 0),
-             1 if parsed.get("needs_review") else 0, nxt),
+             1 if parsed.get("needs_review") else 0, nxt,
+             # ⚠️ 預設 private（用戶要求）—— 唔會唔小心公開
+             "public" if parsed.get("visibility") == "public" else "private"),
         )
         row = conn.execute("SELECT * FROM items WHERE id = ?", (iid,)).fetchone()
     return db.item_row_to_api(row)
@@ -1954,6 +2051,36 @@ class ItemPatch(BaseModel):
     district: Optional[str] = None
     category: Optional[str] = None
     parsed: Optional[dict] = None        # 整個 item 覆蓋（例如 lookup 補完之後）
+
+
+@app.patch("/api/item/{item_id}/visibility")
+def set_item_visibility(item_id: str, body: dict,
+                        user: dict = Depends(current_user)) -> dict:
+    """
+    改一個收藏景點嘅 public／private。
+
+    ⚠️⚠️ 用戶要求：
+       「你 Save 低嘅景點呢應該有分可以分作 public 同埋 Private。
+         Public 就係大家喺呢個 group 裏面嘅都見到，
+         而 Private 就係得自己睇到呢一張。」
+
+    ⚠️ 權限：**只有加嗰個人**可以改自己嗰項嘅可見度 ——
+       唔可以將朋友嘅 private 景點變成 public（咁樣係泄漏）。
+    """
+    vis = (body.get("visibility") or "").strip().lower()
+    if vis not in ("public", "private"):
+        raise HTTPException(400, "只可以係 public 或者 private")
+    with db.connect() as conn:
+        row = conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "搵唔到呢個景點")
+        it = db.row_to_dict(row)
+        _require_member(it["trip_id"], user["id"])
+        # ⚠️⚠️ 只有作者可以改 —— 唔可以改朋友嘅
+        if it.get("created_by") != user["id"]:
+            raise HTTPException(403, "只有加嗰個人可以改呢項嘅可見度")
+        conn.execute("UPDATE items SET visibility=? WHERE id=?", (vis, item_id))
+    return {"ok": True, "visibility": vis}
 
 
 @app.patch("/api/items/{item_id}")

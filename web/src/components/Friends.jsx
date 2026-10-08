@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
+import QrCamera from './QrCamera'
 import Avatar from './Avatar'
 import { readForQr } from '../lib/image'
 import { isSelf, SELF_MSG, SELF_HINT } from '../lib/selfcheck'
@@ -23,6 +24,8 @@ export default function Friends({ trip, me, onRefresh, onTripsChanged, prefill, 
   const lookupTimer = useRef(null)
   const qrFileRef = useRef(null)
   const [qrScan, setQrScan] = useState(false)
+  // ⚠️ 相機掃 QR（用戶要求）
+  const [camOn, setCamOn] = useState(false)
   const [invites, setInvites] = useState([])
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -386,12 +389,20 @@ export default function Friends({ trip, me, onRefresh, onTripsChanged, prefill, 
           </div>
         )}
 
-        {/* 掃 QR */}
+        {/* ⚠️⚠️ 開相機掃（用戶要求）
+               「除咗我哋 upload 人哋嘅 QR code 之外，
+                我仲想用開 Camera 嘅方式」 */}
+        <button className="btn primary wide" style={{ marginBottom: 8 }}
+          onClick={() => setCamOn(true)} disabled={qrScan}>
+          📷 開相機掃 QR Code
+        </button>
+
+        {/* 掃 QR（揀圖） */}
         <input ref={qrFileRef} type="file" accept="image/*"
           onChange={scanQrPic} style={{ display: 'none' }} />
         <button className="btn wide" style={{ marginTop: 10 }}
           onClick={() => qrFileRef.current?.click()} disabled={qrScan}>
-          📷 {qrScan ? '解碼緊…' : '掃 QR Code（揀一張圖）'}
+          🖼 {qrScan ? '解碼緊…' : '揀一張 QR 圖'}
         </button>
         <div className="sub" style={{ fontSize: 10.5, marginTop: 9, lineHeight: 1.8 }}>
           💡 唔想打 @名？叫對方開佢嘅「我嘅 QR」（設定頁）→ 你影低或者截圖

@@ -4,6 +4,7 @@ import { api, auth } from '../lib/api'
 import { toast } from '../lib/ui'
 import { subscribe, cacheStatus, clearTiles, applyUpdate } from '../lib/pwa'
 import { bookmarkletCode } from '../lib/bookmarklet'
+import WallpaperPicker from './WallpaperPicker'
 
 /**
  * 「更多設定」—— Settings 嘅第二層
@@ -172,6 +173,14 @@ export default function SettingsMore({ user, theme, setTheme, onLogout, onReplay
             </button>
           ))}
         </div>
+      </Sec>
+
+      {/* ⚠️⚠️ 自訂背景（用戶要求）
+             「我哋整一個 function 就係改 wallpaper…可以自訂
+              wallpaper 咁然後你就可以加返自己嘅相上去。」 */}
+      <Sec open={open} onToggle={toggle} k="wallpaper"
+        title="🖼 背景圖" hint="預設或者自己嘅相">
+        <WallpaperPicker user={user} onChanged={onRefresh} />
       </Sec>
 
       {/* ── 指導教學 ── */}

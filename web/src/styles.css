@@ -50,7 +50,10 @@
   --safe-l: env(safe-area-inset-left, 0px);
   --safe-r: env(safe-area-inset-right, 0px);
   --nav-h: 62px;
-}
+
+  /* ⚠️ 自訂背景（用戶要求）—— JS 會覆蓋；預設 = 原本嘅 --bg。
+     ⚠️ 一定要喺 CSS 定義咗，唔係嘅話 `var(--wallpaper-preset)` 會失效。 */
+  --wallpaper-preset: var(--bg);}
 
 /* ── 銀河紫藍像素（預設）────────────────────────────── */
 [data-theme='galaxy'] {
@@ -1478,3 +1481,53 @@ input { outline: none; }
   border: none; cursor: pointer;
 }
 .saved-clear:active { transform: scale(.9); }
+
+/* ══════════════════════════════════════════════════════════════
+   🖼 自訂背景（Wallpaper）
+   ══════════════════════════════════════════════════════════════
+   ⚠️⚠️ 用戶要求：可以加自己嘅相做背景。
+
+   ⚠️ 三層（由下至上）：
+     ① .wallpaper-img    你張相（fixed，cover）
+     ② .wallpaper-scrim  暗罩 —— ⚠️ 一定要有，唔係啲字會睇唔到
+     ③ body::before/after 原有氛圍（光暈 + scanline）
+
+   ⚠️ z-index 全部負數 —— 唔可以蓋住 app 內容。
+*/
+.wallpaper-img {
+  position: fixed; inset: 0; z-index: -2;
+  background-size: cover; background-position: center;
+  /* ⚠️ `fixed` 令背景唔跟 scroll（iOS 要 `background-attachment` 都寫）*/
+  background-attachment: fixed;
+}
+
+.wallpaper-scrim {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  /* ⚠️ 兩種情況：
+        · 有相 → 重暗罩（保護文字可讀性）
+        · 冇相 → 透明（preset 自己夠暗） */
+  background:
+    linear-gradient(180deg, rgba(3, 1, 12, .72) 0%, rgba(3, 1, 12, .86) 100%);
+}
+
+/* ⚠️ 內建 preset（由 Wallpaper.jsx 寫入 CSS 變數）*/
+body { background: var(--wallpaper-preset, var(--bg)); }
+
+/* ⚠️ 揀背景嘅格仔 */
+.wall-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+.wall-cell {
+  position: relative; aspect-ratio: 9 / 14;
+  border-radius: 12px; overflow: hidden; cursor: pointer;
+  border: 2px solid var(--border);
+  background-size: cover; background-position: center;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.wall-cell.on { border-color: var(--neon); box-shadow: 0 0 0 2px color-mix(in srgb, var(--neon) 35%, transparent); }
+.wall-cell span {
+  width: 100%; text-align: center; font-size: 9px; font-weight: 700;
+  padding: 3px 2px; background: rgba(0, 0, 0, .62); color: #fff;
+}

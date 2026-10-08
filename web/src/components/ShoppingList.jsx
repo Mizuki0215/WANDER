@@ -74,7 +74,7 @@ function CurrencyPicker({ value, onChange, currencies, style }) {
   )
 }
 
-export default function ShoppingList({ trip, members, onRefresh }) {
+export default function ShoppingList({ trip, members, onRefresh , onToggleVis }) {
   const [data, setData] = useState(null)
   const [currencies, setCurrencies] = useState(null)
   const [text, setText] = useState('')
@@ -415,7 +415,7 @@ export default function ShoppingList({ trip, members, onRefresh }) {
         <Empty icon="🛒" title="購物清單空嘅" hint="上面入一項，或者貼一整份清單落去" />
       ) : (
         pending.map(it => (
-          <ShopRow key={it.id} item={it} tripCurrency={data?.currency} onToggle={() => toggle(it)}
+          <ShopRow key={it.id} item={it} tripCurrency={data?.currency} onToggleVis={onToggleVis} onToggle={() => toggle(it)}
             onDetail={() => setDetail(it)} onChanged={load} onView={setView} />
         ))
       )}
@@ -435,7 +435,7 @@ export default function ShoppingList({ trip, members, onRefresh }) {
               }}>清走</button>
           </div>
           {showDone && done.map(it => (
-            <ShopRow key={it.id} item={it} tripCurrency={data?.currency} onToggle={() => toggle(it)}
+            <ShopRow key={it.id} item={it} tripCurrency={data?.currency} onToggleVis={onToggleVis} onToggle={() => toggle(it)}
               onDetail={() => setDetail(it)} onChanged={load} onView={setView} />
           ))}
         </>
@@ -456,7 +456,8 @@ export default function ShoppingList({ trip, members, onRefresh }) {
   )
 }
 
-function ShopRow({ item, onToggle, onDetail, onChanged, onView, tripCurrency }) {
+function ShopRow({ item, onToggle, onDetail, onChanged, onView, tripCurrency,
+                   onToggleVis }) {
   return (
     <div className="item" style={{
       alignItems: 'center', cursor: 'default',
@@ -497,6 +498,29 @@ function ShopRow({ item, onToggle, onDetail, onChanged, onView, tripCurrency }) 
       <div className="info" onClick={onDetail} style={{ cursor: 'pointer' }}>
         <h4 style={{ textDecoration: item.done ? 'line-through' : 'none' }}>
           {catIcon(item.category)} {item.title}
+            {/* ⚠️⚠️ 私人／共用（用戶要求）
+                   「shopping list 係自己嘅，就算人哋加落去…佢哋應該係睇唔到嘅。」
+                ⚠️ 只有自己加嘅先可以撳（後端都會擋） */}
+            <span
+              role={item.mine ? 'button' : undefined}
+              title={item.visibility === 'group'
+                ? '全組都見到' : '只有你見到'}
+              onClick={e => {
+                if (!item.mine) return
+                e.stopPropagation()
+                onToggleVis?.(item)
+              }}
+              style={{
+                marginLeft: 5, padding: '1px 5px', borderRadius: 999,
+                fontSize: 9, fontWeight: 700, verticalAlign: 'middle',
+                border: '1px solid ' + (item.visibility === 'group'
+                  ? 'var(--cyan)' : 'var(--border)'),
+                color: item.visibility === 'group' ? 'var(--cyan)' : 'var(--dim)',
+                cursor: item.mine ? 'pointer' : 'default',
+                opacity: item.mine ? 1 : .6,
+              }}>
+              {item.visibility === 'group' ? '👥 共用' : '🔒 私人'}
+            </span>
           {item.qty && <span className="sub" style={{ fontSize: 11, fontWeight: 400 }}> × {item.qty}</span>}
         </h4>
         <p>

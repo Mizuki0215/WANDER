@@ -34,7 +34,7 @@ function setTabHome() {
  *   分區排行程已經搬入 Planner（編排）。
  *   呢度係「睇返 / 搵返你收藏咗嘅嘢」。
  */
-export default function Saved({ trip, items, onEditItem, onBack }) {
+export default function Saved({ trip, items, onEditItem, onBack, onToggleVis }) {
   const [q, setQ] = useState('')
   const [picked, setPicked] = useState([])        // 已 tick 嘅地名
 
@@ -197,6 +197,31 @@ export default function Saved({ trip, items, onEditItem, onBack }) {
           <div className="info">
             <h4>{it.name || '（未有名稱）'}</h4>
             <p>
+              {/* ⚠️⚠️ public／private（用戶要求）
+                     「Save 低嘅景點應該分 public 同 Private。
+                       Public = 全 group 見到，Private = 得自己睇到。」
+                  ⚠️ 只有**我加嘅**（`it.mine`）先可以撳 ——
+                     唔可以改朋友嘅可見度（後端都會擋）。 */}
+              <span
+                role={it.mine ? 'button' : undefined}
+                title={it.visibility === 'public'
+                  ? '全 group 都見到' : '只有你見到'}
+                onClick={e => {
+                  if (!it.mine) return
+                  e.stopPropagation()
+                  onToggleVis?.(it)
+                }}
+                style={{
+                  display: 'inline-block', marginRight: 5, padding: '1px 6px',
+                  borderRadius: 999, fontSize: 9.5, fontWeight: 700,
+                  border: '1px solid ' + (it.visibility === 'public'
+                    ? 'var(--cyan)' : 'var(--border)'),
+                  color: it.visibility === 'public' ? 'var(--cyan)' : 'var(--dim)',
+                  cursor: it.mine ? 'pointer' : 'default',
+                  opacity: it.mine ? 1 : .6,
+                }}>
+                {it.visibility === 'public' ? '🌍 公開' : '🔒 私人'}
+              </span>
               {(it.location_path || []).join(' › ') || it.city || '未分類'}
               {it.day_index != null && (
                 <span className="chip" style={{ fontSize: 9, marginLeft: 6 }}>

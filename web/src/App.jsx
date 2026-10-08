@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, auth } from './lib/api'
 import { Toast, Stars, toast, Spinner } from './lib/ui'
+import Wallpaper from './components/Wallpaper'
 import { tripLength } from './lib/dates'
 import Login from './components/Login'
 import Discover from './components/Discover'
@@ -582,7 +583,8 @@ export default function App() {
   if (user && booted && (!user.onboarded || replayTour)) {
     return (
       <div className="app">
-        <Stars />
+        <Wallpaper value={user?.wallpaper} />
+      <Stars />
         <HomeScreen
           trips={trips} trip={trip} items={items} stops={stops} user={user}
           badges={{ shopping: shopBadge, friends: friendBadge }}
@@ -606,6 +608,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <Wallpaper value={user?.wallpaper} />
       <Stars />
       <PwaBar />
 
@@ -739,7 +742,18 @@ export default function App() {
                 分工買嘢，買完剔咗就唔會買雙份
               </div>
               <ShoppingList trip={trip} members={trip?.members?.map(m => m.display_name || m.email) || []}
-                onRefresh={() => refreshTrip(tripId)} />
+                onRefresh={() => refreshTrip(tripId)}
+                /* ⚠️⚠️ 私人／共用（用戶要求）
+                       「shopping list 係自己嘅，就算人哋加落去呢個
+                         planner 度呢，佢哋應該係睇唔到嘅。」 */
+                onToggleVis={async (it) => {
+                  const next = it.visibility === 'group' ? 'private' : 'group'
+                  try {
+                    await api.updateShopping(it.id, { visibility: next })
+                    toast(next === 'group' ? '👥 全組都見到' : '🔒 只有你見到')
+                    refreshTrip(tripId)
+                  } catch (e) { toast(e.message) }
+                }} />
               <div style={{ height: 40 }} />
             </div>
           )}
@@ -752,7 +766,23 @@ export default function App() {
             /* ⚠️⚠️ 用戶要求：唔好叫 Zone，叫 **Saved**。
                入面係「你收藏咗嘅景點」清單 + 搜尋 + 地名 facet。
                （分區排行程已經搬入 Planner 嘅「編排」。） */
-            <Saved items={items} onEditItem={setDetail} onBack={() => setTab('home')} />
+            <Saved items={items} onEditItem={setDetail}
+              onBack={() => setTab('home')}
+              /* ⚠️⚠️ public／private（用戶要求）—— 樂觀更新，即刻見到 */
+              onToggleVis={async (it) => {
+                const next = it.visibility === 'public' ? 'private' : 'public'
+                setItems(prev => prev.map(x =>
+                  x.id === it.id ? { ...x, visibility: next } : x))
+                try {
+                  await api.setItemVisibility(it.id, next)
+                  toast(next === 'public' ? '🌍 全 group 都見到' : '🔒 只有你見到')
+                } catch (e) {
+                  // ⚠️ 失敗要**彈返轉頭**（唔好靜靜呃用戶）
+                  setItems(prev => prev.map(x =>
+                    x.id === it.id ? { ...x, visibility: it.visibility } : x))
+                  toast(e.message)
+                }
+              }} />
           )}
           {tab === 'money' && (
             <div className="screen">
