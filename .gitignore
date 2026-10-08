@@ -101,3 +101,8 @@ server/wander.backup-*.db
 wander-data*.tgz
 wander-backup*.tgz
 *.tgz
+
+# ⚠️⚠️ 匯率快取 —— **執行時**會寫，唔應該 commit
+#    ⚠️ 實測：VM 上 git pull 撞到（local changes would be overwritten）
+#    因為 currency.py 每次攞匯率都會寫呢個檔。
+engine/wander/data/rates.json
