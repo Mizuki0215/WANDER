@@ -152,6 +152,36 @@ echo
 
 # ── ③ 建 repo（如果未有）──
 echo "  檢查 repo…"
+
+# ⚠️⚠️ 如果用戶已經手動建咗一個舊名 repo（例如 yeetung-work），
+#    我哋可以 API 改名 —— 但會**轉移 URL**。
+#    ⚠️ 改名之後舊 URL 會自動 redirect（GitHub 做）。
+OLD="${GITHUB_OLD_NAME:-yeetung-work}"
+if [ "$OLD" != "$REPO" ]; then
+  OLDCODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+    -H "Authorization: Bearer $TOKEN" \
+    "https://api.github.com/repos/$OWNER/$OLD")
+  if [ "$OLDCODE" = "200" ]; then
+    echo "  ⚠️ 發現舊 repo「$OLD」→ 改名做「$REPO」？"
+    read -r -p "     改名？(Y/n)：" REN
+    if [ "$REN" != "n" ] && [ "$REN" != "N" ]; then
+      RRESP=$(curl -s --max-time 30 -X PATCH \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/$OWNER/$OLD" \
+        -d "{\"name\":\"$REPO\"}")
+      if echo "$RRESP" | grep -q '"full_name"'; then
+        echo "  ✅ 改咗做 $OWNER/$REPO"
+        echo "     ⚠️ 舊 URL 會自動 redirect（GitHub 做）"
+      else
+        echo "  ⚠️ 改名失敗："
+        echo "$RRESP" | head -c 300 | sed 's/^/      /'
+        echo
+      fi
+    fi
+  fi
+fi
+
 CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
   -H "Authorization: Bearer $TOKEN" \
   "https://api.github.com/repos/$OWNER/$REPO")
@@ -217,6 +247,41 @@ if git push -u origin main 2>&1 | tail -6; then
   echo "  https://github.com/$OWNER/$REPO"
   echo
   echo "  ⚠️ remote URL 已經清走 token（安全）"
+
+  # ⚠️⚠️ 問要唔要轉 public ——
+  #    但**一定要講清楚**：public 只係「code 睇得到」，
+  #    **唔係**「有個 web app link」。
+  echo
+  echo "  ┌────────────────────────────────────────────────────────┐"
+  echo "  │  ⚠️ 要唔要將個 repo 轉做 public？                       │"
+  echo "  └────────────────────────────────────────────────────────┘"
+  echo
+  echo "  ⚠️ public = **任何人睇得到個 source code**"
+  echo "     ⚠️ 但 **唔會** 令你有一個 web app link ——"
+  echo "        GitHub 只存 code，唔會跑你個 app。"
+  echo "        （要 link 就要 Fly.io / Codespaces，見 DEPLOY.md）"
+  echo
+  echo "  ⚠️ 個 repo 冇秘密（我 check 過 .gitignore）——"
+  echo "     但有 6.9MB GeoNames 城市資料同你自己寫嘅 code。"
+  echo
+  read -r -p "  轉 public？(y/N)：" PUB
+  if [ "$PUB" = "y" ] || [ "$PUB" = "Y" ]; then
+    PRESP=$(curl -s --max-time 30 -X PATCH \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "Accept: application/vnd.github+json" \
+      "https://api.github.com/repos/$OWNER/$REPO" \
+      -d '{"private":false}')
+    if echo "$PRESP" | grep -q '"private":false'; then
+      echo "  ✅ 轉咗做 public"
+    else
+      echo "  ⚠️ 轉唔到（可能係免費帳號限制）："
+      echo "$PRESP" | head -c 250 | sed 's/^/      /'
+    fi
+  else
+    echo "  → 保持 private"
+    echo "     ⚠️ 想公開：https://github.com/$OWNER/$REPO/settings"
+    echo "        Danger Zone → Change visibility"
+  fi
   echo "  ⚠️ 建議即刻去刪咗個 token（或者等佢過期）"
   echo "      https://github.com/settings/tokens"
   echo
