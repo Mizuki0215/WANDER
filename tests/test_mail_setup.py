@@ -496,7 +496,7 @@ class TestNoPrivacyLeaks:
 
     def test_uses_example_domains(self):
         """✅ 應該用 example.com 之類嘅保留域名。"""
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "DEVLOG.md").read_text(encoding="utf-8")
         # ⚠️ RFC 2606 保留域名
         assert "example.com" in readme or "someone@gmail.com" in readme
 

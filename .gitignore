@@ -44,3 +44,8 @@ engine/wander/data/*.tmp
 .tools/
 .pytest_cache/
 *.log
+
+# 截圖工具嘅臨時 Chrome profile
+.chrome-data/
+.cd2/
+docs/shots/*.html

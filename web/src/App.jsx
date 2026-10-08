@@ -363,7 +363,18 @@ export default function App() {
   const dayCount = trip ? tripLength(trip) : 0
 
   // ⚠️ 開機動畫：只喺登入之後播一次（唔會每次切 tab 都彈）
-  if (user && !booted) {
+  // ⚠️ `?noboot=1` —— 跳過開機動畫。
+  //
+  //   為咩要：開機動畫用 `requestAnimationFrame` + `performance.now()`，
+  //   **headless 截圖追唔到**（virtual time 唔會推 rAF）→
+  //   影出嚟永遠都係「000% 初始化」。
+  //
+  //   ⚠️ 亦都對真用戶有用：機慢嘅時候可以跳過。
+  //      預設**唔會**跳（唔改變任何正常行為）。
+  const NO_BOOT = typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).has('noboot')
+
+  if (user && !booted && !NO_BOOT) {
     return <BootScreen onDone={() => setBooted(true)} />
   }
 
