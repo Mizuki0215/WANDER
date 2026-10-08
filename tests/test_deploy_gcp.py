@@ -269,3 +269,56 @@ class TestDocs:
         s = p.read_text(encoding="utf-8")
         assert "e2-micro" in s, "冇講 machine type"
         assert "$0" in s or "免費" in s, "冇講成本"
+
+
+class TestShellSafety:
+    """
+    ⚠️⚠️ 實測捉到：`deploy-gcp.sh: line 223: $1: unbound variable`
+
+       ⚠️ 根因：`say "設 budget alert（$1）…"` ——
+          我想寫「$1 美元」，但喺 `set -u` 之下
+          `$1` 係**未傳入嘅位置參數** → 即刻爆。
+
+       ⚠️ 而且係喺**最後一步**（VM 已建好之後）爆 ——
+          所以 VM 有咗，但 budget alert 冇設到。
+          ⚠️ 呢個最危險：用戶以為成功，但**冇成本保護**。
+    """
+
+    def test_no_bare_dollar_one(self, s):
+        """
+        ⚠️⚠️ 唔可以有未 escape 嘅 `$1` ——
+           `set -u` 之下會 unbound variable。
+        """
+        import re
+        # ⚠️ 去註解先
+        body = "\n".join(l.split("#")[0] if not l.strip().startswith("#") else ""
+                         for l in s.split("\n"))
+        bad = []
+        for i, l in enumerate(body.split("\n"), 1):
+            # ⚠️ `\$1` 係 escape 咗（安全）；`$1` 係真展開（危險）
+            for m in re.finditer(r"(?<!\\)\$1(?![0-9])", l):
+                bad.append(f"行 {i}: {l.strip()[:60]}")
+        assert not bad, f"⚠️ 未 escape 嘅 $1（set -u 會爆）: {bad}"
+
+    def test_uses_set_euo(self, s):
+        """⚠️ 一定要 `set -euo pipefail` —— 咁先捉到錯。"""
+        assert "set -euo pipefail" in s, "冇 set -euo pipefail"
+
+    def test_budget_alert_after_vm(self, s):
+        """
+        ⚠️⚠️ Budget alert 一定要喺**建 VM 之前**設好 ——
+           唔係嘅話 VM 一建好就開始跑，
+           如果之後爆（例如 $1 unbound），就**冇成本保護**。
+
+           （實測：正正就係咁爆咗。）
+        """
+        i_vm = s.index("gcloud compute instances create")
+        i_budget = s.index("billing budgets create")
+        assert i_budget < i_vm, \
+            "⚠️ budget alert 喺建 VM 之後 —— 中間爆嘅話冇保護"
+
+    def test_budget_before_expensive_steps(self, s):
+        """⚠️ 亦都要喺開 API / 保留 IP 之前。"""
+        i_budget = s.index("billing budgets create")
+        for step in ["gcloud services enable", "gcloud compute addresses create"]:
+            assert i_budget < s.index(step), f"budget alert 喺 {step} 之後"

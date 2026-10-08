@@ -122,11 +122,33 @@ fi
 say "Billing：$(gcloud billing projects describe "$PROJECT" \
       --format='value(billingAccountName)' 2>/dev/null | sed 's|billingAccounts/||')"
 
-# ── ② API ──────────────────────────────────────────────────────
+# ── ② Budget alert（⚠️⚠️ 一定要最早設）─────────────────────────────────────────────
+# ⚠️⚠️ 呢個好重要 —— 超出免費額度嘅話，冇 alert 就會靜靜收錢
+# ⚠️⚠️⚠️ **一定要喺建任何嘢之前設** ——
+#    實測教訓：原本喺**最後**設，結果個 script 喺中間爆
+#    （`$1: unbound variable`）→ VM 建好咗但**冇成本保護**。
+#    ✅ 而家搬去最前面：就算之後爆，budget alert 都已經設好。
+say "設 budget alert（US\$1）…"
+BILLING="$(gcloud billing projects describe "$PROJECT" \
+            --format='value(billingAccountName)' 2>/dev/null | sed 's|billingAccounts/||')"
+if [ -n "$BILLING" ]; then
+  if ! gcloud billing budgets list --billing-account="$BILLING" \
+        --format='value(displayName)' 2>/dev/null | grep -q "Wander"; then
+    gcloud billing budgets create \
+      --billing-account="$BILLING" \
+      --display-name="Wander US\$1 alert" \
+      --budget-amount=1USD \
+      --threshold-rule=percent=0.5 \
+      --threshold-rule=percent=0.9 \
+      --threshold-rule=percent=1.0 \
+      --quiet 2>/dev/null || warn "budget alert 建立失敗（可以手動設）"
+  fi
+fi
+# ── ③ API ──────────────────────────────────────────────────────
 say "開 API（compute）…"
 gcloud services enable compute.googleapis.com --quiet
 
-# ── ③ 靜態 IP ──────────────────────────────────────────────────
+# ── ④ 靜態 IP ──────────────────────────────────────────────────
 # ⚠️⚠️ 一定要**靜態** IP —— 唔係嘅話重開機換 IP，
 #    `sslip.io` 個名會失效，PWA 就死（同 serveo 一樣嘅問題）。
 say "保留靜態 IP…"
@@ -139,7 +161,7 @@ HOST="${IP}.sslip.io"      # ⚠️ 免費 wildcard DNS → 解析去呢個 IP
 say "IP：${B}${IP}${N}"
 say "網址：${B}https://${HOST}${N}"
 
-# ── ④ 防火牆 ───────────────────────────────────────────────────
+# ── ⑤ 防火牆 ───────────────────────────────────────────────────
 say "開防火牆 22 / 80 / 443…"
 if ! gcloud compute firewall-rules describe "$FW_NAME" >/dev/null 2>&1; then
   gcloud compute firewall-rules create "$FW_NAME" \
@@ -148,7 +170,7 @@ if ! gcloud compute firewall-rules describe "$FW_NAME" >/dev/null 2>&1; then
     --description="Wander web" --quiet
 fi
 
-# ── ⑤ 啟動 script（喺 VM 入面跑）──────────────────────────────
+# ── ⑥ 啟動 script（喺 VM 入面跑）──────────────────────────────
 # ⚠️ 用 startup-script 而唔係 ssh 落去跑命令 ——
 #    咁樣 VM 重開機都會自動重新設定好。
 STARTUP="$(mktemp)"
@@ -240,7 +262,7 @@ VMEOF
 # ⚠️ 替換 placeholder（heredoc quoted 所以唔會自動展開）
 sed -i "s|__REPO__|${REPO}|g; s|__HOST__|${HOST}|g" "$STARTUP"
 
-# ── ⑥ 建 VM ────────────────────────────────────────────────────
+# ── ⑦ 建 VM ────────────────────────────────────────────────────
 say "建 VM（第一次要 3–5 分鐘）…"
 if gcloud compute instances describe "$VM_NAME" --zone="$ZONE" >/dev/null 2>&1; then
   warn "VM 已經有 —— 更新 startup script + 重開機"
@@ -260,25 +282,6 @@ else
     --quiet
 fi
 rm -f "$STARTUP"
-
-# ── ⑦ Budget alert ─────────────────────────────────────────────
-# ⚠️⚠️ 呢個好重要 —— 超出免費額度嘅話，冇 alert 就會靜靜收錢
-say "設 budget alert（$1）…"
-BILLING="$(gcloud billing projects describe "$PROJECT" \
-            --format='value(billingAccountName)' 2>/dev/null | sed 's|billingAccounts/||')"
-if [ -n "$BILLING" ]; then
-  if ! gcloud billing budgets list --billing-account="$BILLING" \
-        --format='value(displayName)' 2>/dev/null | grep -q "Wander"; then
-    gcloud billing budgets create \
-      --billing-account="$BILLING" \
-      --display-name="Wander \$1 alert" \
-      --budget-amount=1USD \
-      --threshold-rule=percent=0.5 \
-      --threshold-rule=percent=0.9 \
-      --threshold-rule=percent=1.0 \
-      --quiet 2>/dev/null || warn "budget alert 建立失敗（可以手動設）"
-  fi
-fi
 
 # ── ⑧ 完成 ─────────────────────────────────────────────────────
 cat <<EOF
@@ -315,7 +318,7 @@ cat <<EOF
 
   ── 💰 成本 ──
      VM + 30GB 磁碟：  \$0/月（Always Free）
-     ⚠️ 超出 1 GB/月 出流量會收錢 —— 已設 \$1 budget alert
+     ⚠️ 超出 1 GB/月 出流量會收錢 —— 已設 US\$1 budget alert
 
   ── ⚠️ 慳錢貼士 ──
      唔用嗰陣可以停 VM（唔會收錢，但資料留住）：
