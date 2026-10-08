@@ -180,3 +180,63 @@ gh auth login
 想展示但唔要功能     → GitHub Pages（⚠️ 冇用）
 想自己部機 24/7      → 開住 ./host.sh（部機唔可以瞓）
 ```
+
+---
+
+## 🔑 一鍵 Push（`push-to-github.sh`）
+
+⚠️ `brew install gh` 喺呢部機**失敗**（`/opt/homebrew/Cellar` 唔可以寫），
+   所以用 **Personal Access Token + git** 代替。
+
+### 用法
+
+```bash
+cd "/Users/yeetungchan/Documents/deepseek-harness/default-workspace"
+./push-to-github.sh
+```
+
+⚠️⚠️ **Token 唔會經過對話** —— 用 `read -s`（唔 echo）收，
+   token 只用嚟：
+- ① 打 GitHub API 建立 repo
+- ② push
+- 然後**即刻由 remote URL 移除**
+
+### 步驟
+
+```
+1. 去 https://github.com/settings/tokens/new?scopes=repo&description=Wander
+2. 揀 scope：☑ repo     （就咁一個就夠）
+3. 有效期：建議 7 日    （用完即刻刪）
+4. 複製個 token（ghp_... 或者 github_pat_...）
+5. 跑 ./push-to-github.sh → 貼 token → Enter
+```
+
+### 個 script 會做
+
+```
+✅ 安全檢查（166 個檔案，0 個秘密）
+✅ 收 token（唔 echo）
+✅ 建立 repo（如果未有）→ private
+✅ push
+✅ ⚠️ 清走 remote URL 入面嘅 token
+```
+
+⚠️ **實測**：`printf '' | ./push-to-github.sh` → 正確喺安全檢查之後停下
+（冇打 token 就唔會亂做嘢）。
+
+### ⚠️ 用完即刻刪 token
+
+```
+https://github.com/settings/tokens
+```
+
+⚠️ 因為 token 一度出現喺 process 嘅 argv（`git remote add` 嗰下）——
+   喺你自己部機冇問題，但用完刪咗最安全。
+
+### 如果 `gh` 裝得到（喺你自己嘅 terminal）
+
+```bash
+brew install gh
+gh auth login
+gh repo create yeetung-work --private --source=. --push
+```
