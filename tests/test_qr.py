@@ -51,12 +51,12 @@ def _decode(mx) -> str:
 
 
 SAMPLES = [
-    "http://192.168.1.150:8787",
-    "http://192.168.1.83:8787",
+    "http://192.168.1.100:8787",
+    "http://192.168.1.100:8787",
     "https://wander.example.com",
     "A",
     "福岡旅行 2027",
-    "http://192.168.100.200:8787/join/ABCD1234",
+    "http://192.168.1.100:8787/join/ABCD1234",
     "Wander — 一齊計劃旅行",
     "https://wander.app/share/abcdefghijklmnop",
     "🛒 購物清單",
@@ -200,7 +200,7 @@ class TestFormatInfo:
         return "".join("1" if mx[r][c] else "0" for r, c in pts)[::-1]
 
     @pytest.mark.parametrize("text", [
-        "A", "https://example.com", "http://192.168.1.150:8787",
+        "A", "https://example.com", "http://192.168.1.100:8787",
         "福岡旅行", "x" * 60,
     ])
     def test_matches_standard_table(self, text):

@@ -87,9 +87,9 @@ const RESPONSES = {
   '/api/trips/t1/zones': { zones: [] },
   '/api/friends': { friends: [], incoming: [], outgoing: [] },
   '/api/invites': { invites: [] },
-  '/api/me/qr': { url: 'http://192.168.1.83:8787/?add=icyyy1', svg: QR_SVG,
+  '/api/me/qr': { url: 'http://192.168.1.100:8787/?add=icyyy1', svg: QR_SVG,
                   username: 'icyyy1', display_name: 'ic yyy' },
-  '/api/qr': { url: 'http://192.168.1.83:8787', svg: QR_SVG },
+  '/api/qr': { url: 'http://192.168.1.100:8787', svg: QR_SVG },
   '/api/ig-provider': { enabled: false },
   '/api/health': { ok: true },
 }

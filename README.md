@@ -78,14 +78,14 @@ IG / 小紅書 caption            Google Maps link
 ## 快速開始
 
 ```bash
-cd "/Users/yeetungchan/Documents/deepseek-harness/default-workspace"
+cd "/path/to/wander"
 ./run.sh
 ```
 
 然後開 <http://127.0.0.1:8787>
 
 **手機用**：連同一個 WiFi，開 server console 印出嘅區網 URL
-（例如 `http://192.168.1.23:8787`）。加到主畫面就同 App 一樣。
+（例如 `http://192.168.1.100:8787`）。加到主畫面就同 App 一樣。
 
 > ⚠️ **登入驗證碼會印喺 server console**（開發模式，唔使設定 SMTP）。
 > 前端亦會自動填入。
@@ -974,7 +974,7 @@ python tools/manage_account.py someone@gmail.com --delete     # ⚠️ 破壞性
 
 ### ⚠️⚠️⚠️ 三個 FK CASCADE 陷阱（實測造成資料損失）
 
-我刪 `icychan51@gmail.com` 嗰陣，**頭兩次都刪走咗朋友嘅資料**。
+我刪 `user@example.com` 嗰陣，**頭兩次都刪走咗朋友嘅資料**。
 三個唔同嘅 FK 各自咬咗一啖：
 
 | # | FK | 後果 |
@@ -1647,7 +1647,7 @@ useEffect(() => {
 
 **QR 內容係一條 URL**（唔係淨係個 username）：
 ```
-http://192.168.1.83:8787/?add=alice_99
+http://192.168.1.100:8787/?add=alice_99
 ```
 | 邊個掃 | 會點 |
 |---|---|
@@ -3280,13 +3280,13 @@ or (raw[:4] == b"RIFF" and raw[8:12] == b"WEBP")
 ```
 ┌──────────────────┐
 │ █▀▀▀█ ▄▀ █▀▀▀█   │
-│ █ ▄▄▄█ ▀▄ █ ▄▄▄█  │   http://192.168.1.150:8787
+│ █ ▄▄▄█ ▀▄ █ ▄▄▄█  │   http://192.168.1.100:8787
 │ █▄▄▄█ █▀ █▄▄▄█   │
 └──────────────────┘
       [複製連結] [重新產生]
 ```
 
-> ⚠️ 唔使喺手機打 `192.168.1.150:8787` 呢串嘢 —— 掃一下就得。
+> ⚠️ 唔使喺手機打 `192.168.1.100:8787` 呢串嘢 —— 掃一下就得。
 
 ### ⚠️ http:// 嘅限制（老實講）
 

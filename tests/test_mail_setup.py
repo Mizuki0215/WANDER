@@ -429,3 +429,98 @@ class TestShellScriptSafety:
             pytest.skip("冇 host.sh")
         s = p.read_text(encoding="utf-8")
         assert "set -euo pipefail" in s
+
+
+class TestNoPrivacyLeaks:
+    """
+    ⚠️⚠️ 用戶問：「要 public 嗎？你建議 private，why？」
+
+       我做咗實際審計，搵到**真實私隱洩漏**：
+
+       | 洩漏 | 影響 |
+       |---|---|
+       | 你嘅真 email | spam / 釣魚 |
+       | 你嘅 macOS 用戶名 | 本機路徑 |
+       | 屋企 LAN IP | 網絡拓樸 |
+       | 部機／手機 IP | 同上 |
+
+       ⚠️ 呢啲**唔係 secret**（唔可以「登入」），
+          但係**私隱** —— 一旦 public 就永遠喺 GitHub 歷史入面。
+
+       呢個 class 守住佢哋唔會再出現。
+    """
+
+    # ⚠️⚠️ 唔可以出現嘅嘢。
+    #
+    #    ⚠️ 一定要**砌出嚟**而唔係直接寫字面值 ——
+    #       唔係嘅話呢個檔案自己就會 match 自己
+    #       （今日第 N 次中呢個招）。
+    @staticmethod
+    def _forbidden():
+        import re
+        name = "icy" + "chan51"
+        return [
+            (re.escape(name + "@gmail.com"), "真 email"),
+            (r"/Users/yeetung" + "chan", "macOS 用戶名"),
+            (r"192\.168\.1\." + "83(?!" + r"\d)", "屋企 LAN IP"),
+            (r"192\.168\.1\." + "150(?!" + r"\d)", "部機 LAN IP"),
+            (r"192\.168\." + "100\.200", "另一個 IP"),
+        ]
+
+    def _tracked_files(self):
+        import subprocess
+        out = subprocess.run(["git", "ls-files"], cwd=ROOT,
+                             capture_output=True, text=True).stdout
+        return [f for f in out.split("\n") if f.strip()]
+
+    def test_no_real_privacy_data(self):
+        """⚠️⚠️ 掃描所有 git 追蹤嘅檔案。"""
+        import re
+        bad = []
+        for f in self._tracked_files():
+            p = ROOT / f
+            if not p.is_file():
+                continue
+            try:
+                s = p.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            for pat, label in self._forbidden():
+                for m in re.finditer(pat, s):
+                    line = s[:m.start()].count("\n") + 1
+                    bad.append(f"{f}:{line}  {label}")
+        assert not bad, (
+            "⚠️⚠️ 呢啲真實私隱唔應該 commit（public 之前一定要清）：\n  "
+            + "\n  ".join(bad[:20])
+        )
+
+    def test_uses_example_domains(self):
+        """✅ 應該用 example.com 之類嘅保留域名。"""
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        # ⚠️ RFC 2606 保留域名
+        assert "example.com" in readme or "someone@gmail.com" in readme
+
+    def test_gitignore_blocks_env(self):
+        """⚠️ 呢個係最後防線 —— .env 永遠唔可以 commit。"""
+        import subprocess
+        r = subprocess.run(
+            ["git", "check-ignore", "server/.env", "server/wander.db"],
+            cwd=ROOT, capture_output=True, text=True)
+        assert r.returncode == 0, "⚠️⚠️ .env / wander.db 冇被 gitignore"
+        lines = r.stdout.strip().split("\n")
+        assert "server/.env" in lines
+        assert "server/wander.db" in lines
+
+    def test_commit_author_is_generic(self):
+        """
+        ⚠️ git commit metadata 都會公開（name + email）——
+           唔好用真名同真 email。
+        """
+        import subprocess
+        out = subprocess.run(
+            ["git", "log", "--format=%ae"], cwd=ROOT,
+            capture_output=True, text=True).stdout
+        emails = {e.strip() for e in out.split("\n") if e.strip()}
+        for e in emails:
+            assert "@gmail.com" not in e, f"⚠️ commit 用咗真 Gmail：{e}"
+            assert "yeetungchan" not in e, f"⚠️ commit 用咗真名：{e}"

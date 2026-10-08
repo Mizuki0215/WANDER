@@ -99,13 +99,13 @@ min_machines_running = 1      # ⚠️ 會用多啲免費額度
 
 ## 📤 Push 上 GitHub
 
-⚠️⚠️ **`git` repo root 原本係你嘅 home directory**（`/Users/yeetungchan`）——
+⚠️⚠️ **`git` repo root 原本係你嘅 home directory**（`/Users/you`）——
    唔可以 push 成個 home 上去。我已經喺 workspace 開咗**獨立 repo**。
 
 ### 1. 確認冇秘密
 
 ```bash
-cd "/Users/yeetungchan/Documents/deepseek-harness/default-workspace"
+cd "/path/to/wander"
 
 # ⚠️ 呢四個一定要被擋住
 git check-ignore server/wander.db server/.env node_modules backup-*.db
@@ -191,7 +191,7 @@ gh auth login
 ### 用法
 
 ```bash
-cd "/Users/yeetungchan/Documents/deepseek-harness/default-workspace"
+cd "/path/to/wander"
 ./push-to-github.sh
 ```
 

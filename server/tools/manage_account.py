@@ -4,12 +4,12 @@
 ==============
 
 ⚠️⚠️ 用戶情況：
-   「我登入唔返 icychan51@gmail.com，可能係個密碼問題啦，
+   「我登入唔返 user@example.com，可能係個密碼問題啦，
     你可以幫我重設下，即係冇咗呢個紀錄、注銷咗佢，
     咁重新註冊一個。」
 
 ⚠️⚠️ 但「刪除帳號」係**破壞性**嘅，而且通常**唔需要**：
-   實測 icychan51@gmail.com **冇密碼**（`password_hash` 空白）——
+   實測 user@example.com **冇密碼**（`password_hash` 空白）——
    係「驗證碼時代」開嘅舊帳號。
    → 佢唔係「密碼錯」，係**從來冇密碼**。
    → 只要**設一個密碼**就得，**唔使刪任何嘢**。
@@ -18,10 +18,10 @@
    刪咗嘅話朋友都會受影響。
 
 用法：
-    python tools/manage_account.py icychan51@gmail.com --show
-    python tools/manage_account.py icychan51@gmail.com --set-password 新密碼
-    python tools/manage_account.py icychan51@gmail.com --clear-password
-    python tools/manage_account.py icychan51@gmail.com --delete        # ⚠️ 破壞性
+    python tools/manage_account.py user@example.com --show
+    python tools/manage_account.py user@example.com --set-password 新密碼
+    python tools/manage_account.py user@example.com --clear-password
+    python tools/manage_account.py user@example.com --delete        # ⚠️ 破壞性
 """
 
 from __future__ import annotations

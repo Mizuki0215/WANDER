@@ -31,7 +31,7 @@ def lan_ips() -> list[str]:
 
     ⚠️⚠️ 踩過嘅大坑：最初用 `socket.connect(('8.8.8.8', 80))` 攞 IP，
        結果攞到 **VPN 嘅 utun 介面 IP**（10.2.0.2），唔係 WiFi 嘅
-       192.168.1.83。用戶照住印出嘅 URL 用手機連 → 永遠連唔到。
+       192.168.1.100。用戶照住印出嘅 URL 用手機連 → 永遠連唔到。
 
     教訓：macOS 有 VPN / iCloud Private Relay 嘅時候，
          「route 去 8.8.8.8 用邊個介面」唔等於「手機連得到嘅介面」。
