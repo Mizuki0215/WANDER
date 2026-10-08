@@ -240,3 +240,39 @@ brew install gh
 gh auth login
 gh repo create yeetung-work --private --source=. --push
 ```
+
+---
+
+## ⚠️⚠️ 實測捉到嘅 bug：`REPO?: unbound variable`
+
+```
+./push-to-github.sh: line 167: REPO?: unbound variable
+```
+
+⚠️ **真名係 `REPO（`** —— 個 `（` 係 **U+FF08 全形左括號**，
+   你嘅 terminal 將佢顯示成 `?`。
+
+### 原因
+
+```bash
+echo "  ✅ 建立咗 $OWNER/$REPO（private）"
+#                            ^^^^^ 後面跟住全形括號
+```
+
+⚠️ 理論上 bash 應該停喺非識別字元（`（` 唔係 `[A-Za-z0-9_]`），
+   但實測喺**某啲 locale / bash 版本**之下會出事。
+
+### 修法
+
+```bash
+# ❌ 危險
+"$REPO（private）"
+
+# ✅ 一定安全
+"${REPO}（private）"
+```
+
+**規則：`$VAR` 後面跟住非 ASCII 就一定寫 `${VAR}`。**
+
+⚠️ 已經修好 `push-to-github.sh`（1 處）同 `host.sh`（1 處），
+   並且加咗測試**掃描所有 shell script** 守住呢個 pattern。
