@@ -68,7 +68,26 @@ echo
 command -v gcloud >/dev/null 2>&1 || die "搵唔到 gcloud —— 要喺 Google Cloud Shell 跑"
 
 PROJECT="$(gcloud config get-value project 2>/dev/null)"
-[ -n "$PROJECT" ] && [ "$PROJECT" != "(unset)" ] || die "冇揀 project"
+if [ -z "$PROJECT" ] || [ "$PROJECT" = "(unset)" ]; then
+  # ⚠️⚠️ 唔好淨係話「冇揀 project」—— 要**列出**有咩揀，
+  #    同埋教用戶點建一個。（實測：用戶第一次跑就撞到呢個。）
+  warn "Cloud Shell 未揀 project"
+  echo
+  echo "  ${B}你有嘅 project：${N}"
+  gcloud projects list --format="table(projectId,name)" 2>/dev/null \
+    | sed 's/^/    /' || echo "    （冇）"
+  echo
+  echo "  ${B}做法：${N}"
+  echo "    ① 揀一個（用 PROJECT_ID，唔係 NAME）："
+  echo "         gcloud config set project 你嘅-project-id"
+  echo "    ② 冇 project 就建一個："
+  echo "         gcloud projects create wander-app-\$RANDOM --name=Wander"
+  echo "         gcloud config set project \$(gcloud projects list --format='value(projectId)' --limit=1)"
+  echo "    ③ 再跑："
+  echo "         bash deploy-gcp.sh"
+  echo
+  die "請揀咗 project 再跑"
+fi
 say "Project：${B}${PROJECT}${N}"
 
 # ⚠️⚠️ 一定要設 budget alert —— 唔係嘅話超出免費額度會靜靜收錢
