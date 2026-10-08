@@ -27,12 +27,61 @@ const CATS = [
 
 const catIcon = (k) => (CATS.find(c => c.k === k)?.label || '✦').split(' ')[0]
 
+/**
+ * 貨幣揀選 —— 用戶要求：
+ *   「有時你去旅行如果唔係都係用港幣㗎嘛，所以你要 mark 低返
+ *    嗰個嘅價錢係有得揀嗰個 Yen or KRW or EUR、HKD 定係點樣？」
+ *
+ * ⚠️ 用 `<select>` 而唔係自製 dropdown ——
+ *    手機原生 picker 好好用（唔使自己處理 scroll / 遮蓋）。
+ * ⚠️ 常用幣排前面（`optgroup`），全部 340 個喺後面。
+ */
+// ⚠️ 貨幣符號（同 engine/wander/currency.py 嘅 _SYMBOLS 一致）
+//    ⚠️ 前端唔 import 得到 Python —— 呢度要有一份。
+const SYMBOLS = {
+  HKD: 'HK$', JPY: '¥', KRW: '₩', TWD: 'NT$', CNY: 'CN¥',
+  USD: '$', EUR: '€', GBP: '£', THB: '฿', SGD: 'S$',
+  MYR: 'RM', VND: '₫', PHP: '₱', IDR: 'Rp', INR: '₹',
+  AUD: 'A$', CAD: 'C$', CHF: 'CHF', NZD: 'NZ$', AED: 'د.إ',
+}
+
+function CurrencyPicker({ value, onChange, currencies, style }) {
+  const common = currencies?.common || []
+  const all = currencies?.all || []
+  const commonCodes = new Set(common.map(c => c.code))
+  const rest = all.filter(c => !commonCodes.has(c.code))
+
+  return (
+    <select className="input" value={value || ''} onChange={e => onChange(e.target.value)}
+      style={{ flex: '0 0 auto', width: 92, fontWeight: 700, ...style }}
+      title="呢項嘅貨幣">
+      {common.length > 0 && (
+        <optgroup label="常用">
+          {common.map(c => (
+            <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
+          ))}
+        </optgroup>
+      )}
+      {rest.length > 0 && (
+        <optgroup label="全部">
+          {rest.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+        </optgroup>
+      )}
+      {common.length === 0 && all.length === 0 && (
+        <option value="">HKD</option>
+      )}
+    </select>
+  )
+}
+
 export default function ShoppingList({ trip, members, onRefresh }) {
   const [data, setData] = useState(null)
+  const [currencies, setCurrencies] = useState(null)
   const [text, setText] = useState('')
   const [qty, setQty] = useState('')
   const [cat, setCat] = useState('souvenir')
   const [price, setPrice] = useState('')
+  const [cur, setCur] = useState('')          // ⚠️ 空 = 用旅程貨幣
   const [assignee, setAssignee] = useState('')
   const [busy, setBusy] = useState(false)
   const [detail, setDetail] = useState(null)
@@ -52,7 +101,11 @@ export default function ShoppingList({ trip, members, onRefresh }) {
 
   const pending = useMemo(() => (data?.items || []).filter(i => !i.done), [data])
   const done = useMemo(() => (data?.items || []).filter(i => i.done), [data])
-  const budget = useMemo(
+  // ⚠️⚠️ 注意：`budget` 係**未換算**嘅原始數 ——
+  //    日元同港幣加埋一齊係**冇意義**嘅。
+  //    ⚠️ 所以**唔可以**用佢做總額顯示。
+  //    總額用後端嘅 `data.total`（已經按匯率換算好）。
+  const budgetRaw = useMemo(
     () => pending.reduce((n, i) => n + (Number(i.price) || 0), 0), [pending])
 
   /** 揀相 → 縮圖 → 準備上傳。 */
@@ -111,9 +164,11 @@ export default function ShoppingList({ trip, members, onRefresh }) {
         title: t, qty: qty.trim(), category: cat,
         price: price === '' ? null : Number(price),
         assignee: assignee.trim(),
+        // ⚠️ 空字串 = 用旅程嘅記帳貨幣（後端會處理）
+        currency: cur || null,
       })
       item = r?.item || null
-      setText(''); setQty(''); setPrice(''); setPhoto(null); setNear(null)
+      setText(''); setQty(''); setPrice(''); setPhoto(null); setNear(null); setCur('')
       await load(); onRefresh?.()
     } catch (e) {
       toast(e.message)
@@ -199,8 +254,15 @@ export default function ShoppingList({ trip, members, onRefresh }) {
         </div>
 
         <div className="row" style={{ gap: 7, marginTop: 9 }}>
-          <input className="input" type="number" value={price} placeholder="單價（可選）"
+          <input className="input" type="number" inputMode="decimal"
+            value={price} placeholder="單價（可選）"
             onChange={e => setPrice(e.target.value)} style={{ flex: 1 }} />
+          {/* ⚠️⚠️ 用戶要求：價錢要可以揀貨幣（去日本買嘢用 JPY）。
+                 ⚠️ 預設跟旅程嘅記帳貨幣（`cur` 空 = 跟旅程）。 */}
+          <CurrencyPicker value={cur} onChange={setCur} currencies={currencies} />
+        </div>
+
+        <div className="row" style={{ gap: 7, marginTop: 9 }}>
           <select className="input" value={assignee} onChange={e => setAssignee(e.target.value)}
             style={{ flex: 1 }}>
             <option value="">邊個買（可選）</option>
@@ -312,7 +374,8 @@ export default function ShoppingList({ trip, members, onRefresh }) {
           {[
             ['要買', data.pending_count],
             ['買咗', data.done_count],
-            ['預算', `¥${Math.round(budget).toLocaleString()}`],
+            // ⚠️ 用後端換算好嘅總額（`budgetRaw` 係未換算嘅原始數）
+            ['預算', `${SYMBOLS[data?.currency] || data?.currency || ''}${Number(data?.total || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`],
           ].map(([k, v]) => (
             <div key={k} className="card" style={{ padding: '9px 8px', textAlign: 'center' }}>
               <div className="mono" style={{ fontSize: 16, fontWeight: 900, color: 'var(--cyan)' }}>{v}</div>
@@ -323,7 +386,31 @@ export default function ShoppingList({ trip, members, onRefresh }) {
       )}
 
       {/* ── 要買 ── */}
-      <div className="sec">要買 · {pending.length}</div>
+      {/* ⚠️⚠️ 總額 —— 用戶要求：「根據匯率去轉返嗰個你想要嘅錢」
+              ⚠️ 總額一定要用**一個貨幣**先有意義（旅程嘅記帳貨幣）。
+              ⚠️ 換唔到嘅項要**明確講**（唔可以靜靜咁唔計）。 */}
+      <div className="sec" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span>要買 · {pending.length}</span>
+        {/* ⚠️ 用**後端換算好嘅** `data.total`（已經按匯率加好）——
+            唔可以用 `budget`（嗰個係**未換算**嘅原始數加埋一齊，
+            日元同港幣加埋係冇意義嘅）。 */}
+        {data?.total > 0 && (
+          <span className="mono" style={{ fontSize: 12, fontWeight: 900, color: 'var(--cyan)' }}>
+            {SYMBOLS[data.currency] || data.currency || ''}
+            {Number(data.total).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </span>
+        )}
+        {data?.unconverted > 0 && (
+          <span className="sub" style={{ fontSize: 10, color: 'var(--warn)' }}>
+            ⚠️ {data.unconverted} 項換唔到匯率（未計入總額）
+          </span>
+        )}
+        {data?.rates_stale && (
+          <span className="sub" style={{ fontSize: 10, color: 'var(--warn)' }}>
+            ⚠️ 匯率可能舊咗
+          </span>
+        )}
+      </div>
       {!pending.length ? (
         <Empty icon="🛒" title="購物清單空嘅" hint="上面入一項，或者貼一整份清單落去" />
       ) : (
@@ -414,7 +501,13 @@ function ShopRow({ item, onToggle, onDetail, onChanged, onView }) {
         </h4>
         <p>
           {item.assignee ? `${item.assignee} 買` : '未指派'}
-          {item.price ? ` · ¥${Number(item.price).toLocaleString()}` : ''}
+          {/* ⚠️⚠️ 原本硬編碼 `¥` —— 用戶報「有時唔係用港幣㗎嘛」。
+                 而家顯示**該項自己嘅貨幣**，如果同旅程貨幣唔同
+                 就順便顯示換算後嘅數。 */}
+          {item.price ? ` · ${SYMBOLS[item.currency] || item.currency || ''}${Number(item.price).toLocaleString()}` : ''}
+          {item.price && item.price_trip != null && item.currency !== data?.currency
+            ? ` (≈ ${SYMBOLS[data?.currency] || data?.currency || ''}${Number(item.price_trip).toLocaleString()})`
+            : ''}
           {item.note ? ` · ${item.note}` : ''}
         </p>
       </div>

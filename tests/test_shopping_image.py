@@ -200,8 +200,15 @@ class TestBackendSavesImage:
            → 相片**無聲無息**咁消失。
         """
         i = srv.index("def add_shopping(")
-        blk = srv[i:i + 1400]
-        assert "created_by, image)" in blk, "INSERT 冇寫 image 欄"
+        blk = srv[i:i + 1800]
+        # ⚠️ 唔可以寫死 `created_by, image)` ——
+        #    後來加咗 `currency` 欄（INSERT 欄位清單你會改）。
+        #    改用 regex 檢查 image 真係喺欄位清單入面。
+        m = re.search(r"INSERT INTO shopping_items\s*\(([^)]+)\)", blk)
+        assert m, "搵唔到 INSERT 欄位清單"
+        cols = [c.strip() for c in m.group(1).split(",")]
+        assert "image" in cols, f"INSERT 冇 image 欄（欄位：{cols}）"
+        assert "currency" in cols, f"INSERT 冇 currency 欄（欄位：{cols}）"
         assert 'body.get("image")' in blk, "INSERT 冇攞 body 嘅 image"
 
     def test_patch_supports_image(self, srv):

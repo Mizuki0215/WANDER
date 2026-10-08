@@ -30,7 +30,7 @@ from typing import Any, Optional
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "engine"))
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status  # noqa: E402
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, status  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
@@ -255,10 +255,54 @@ def list_shopping(trip_id: str, user: dict = Depends(current_user)) -> dict:
             """SELECT * FROM shopping_items WHERE trip_id = ?
                ORDER BY done, position, created_at""", (trip_id,)).fetchall()
     items = [db.row_to_dict(r) for r in rows]
-    total = sum((i["price"] or 0) for i in items if not i["done"])
+
+    # ⚠️⚠️ 用戶要求：「根據匯率去轉返嗰個你想要嘅錢」
+    #
+    #   每項可能有**自己嘅貨幣**（去日本買嘢 = JPY），
+    #   但總額一定要用**一個貨幣**先有意義（通常 HKD）。
+    #
+    #   ⚠️ 用旅程嘅記帳貨幣做基準 —— 冇設就 HKD。
+    with db.connect() as conn2:
+        row = conn2.execute("SELECT currency FROM trips WHERE id=?",
+                            (trip_id,)).fetchone()
+    trip_cur = ((db.row_to_dict(row) or {}).get("currency") or "HKD").upper()
+
+    from wander import currency as _cur
+    rates = _cur.get_rates(trip_cur)
+    rmap = rates.get("rates") or {}
+
+    def to_trip(price, code):
+        """⚠️ 換唔到就回 None（**唔可以**當同一個數 —— 會靜靜咁畀錯錢）。"""
+        if price is None:
+            return None
+        c = (code or trip_cur).upper()
+        if c == trip_cur:
+            return round(float(price), 2)
+        r = rmap.get(c)
+        if not r:
+            return None
+        return round(float(price) * (1.0 / r), 2)
+
+    total = 0.0
+    unconverted = 0
+    for i in items:
+        v = to_trip(i.get("price"), i.get("currency"))
+        i["price_trip"] = v                 # 換算後（睇總額用）
+        i["currency"] = i.get("currency") or trip_cur
+        if not i["done"] and i.get("price") is not None:
+            if v is None:
+                unconverted += 1
+            else:
+                total += v
+
     return {
         "items": items,
         "total": round(total, 2),
+        "currency": trip_cur,
+        "rates_at": rates.get("at"),
+        "rates_stale": bool(rates.get("stale")),
+        # ⚠️ 有幾項換唔到 → 前端要提示「總額可能唔齊」
+        "unconverted": unconverted,
         "done_count": sum(1 for i in items if i["done"]),
         "pending_count": sum(1 for i in items if not i["done"]),
     }
@@ -277,17 +321,22 @@ def add_shopping(trip_id: str, body: dict, user: dict = Depends(current_user)) -
         # ⚠️⚠️ `image` 之前**冇寫入** —— 前端明明有送，
         #    但後端 INSERT 漏咗個欄 → **相片無聲無息咁消失**。
         #    （schema 有 `image` 欄，前端 `add()` 有送，就係呢度漏。）
+        # ⚠️⚠️ 用戶要求：「有時你去旅行如果唔係都係用港幣㗎嘛，
+        #    所以你要 mark 低返嗰個嘅價錢係有得揀嗰個 Yen or KRW…」
+        #    → 每項都可以有**自己嘅貨幣**。
+        #    ⚠️ 空 = 用旅程嘅記帳貨幣（唔係硬編碼 HKD）。
+        cur_code = (body.get("currency") or "").strip().upper() or None
         conn.execute(
             """INSERT INTO shopping_items
                (id, trip_id, title, qty, note, category, assignee, price, position,
-                created_by, image)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                created_by, image, currency)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             (sid, trip_id, title, (body.get("qty") or "").strip(),
              (body.get("note") or "").strip(),
              (body.get("category") or "other").strip(),
              (body.get("assignee") or "").strip(),
              body.get("price"), n, user["id"],
-             (body.get("image") or "").strip() or None))
+             (body.get("image") or "").strip() or None, cur_code))
         row = conn.execute("SELECT * FROM shopping_items WHERE id=?", (sid,)).fetchone()
     return {"item": db.row_to_dict(row)}
 
@@ -312,6 +361,10 @@ def update_shopping(item_id: str, body: dict,
     #       所以用 `is not None or k == 'image'` 分開處理。
     if "image" in body and body["image"] is not None:
         fields.append("image=?"); vals.append(str(body["image"]).strip() or None)
+    # ⚠️ 貨幣：空字串 = 清走（用返旅程嘅記帳貨幣）
+    if "currency" in body:
+        fields.append("currency=?")
+        vals.append((str(body["currency"]).strip().upper() or None))
     if "price" in body:
         fields.append("price=?"); vals.append(body["price"])
     if "done" in body:
@@ -1381,6 +1434,9 @@ class TripUpdate(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     days: Optional[int] = Field(default=None, ge=1, le=30)
+    # ⚠️⚠️ 記帳貨幣（用戶要求：「根據匯率去轉返嗰個你想要嘅錢」）
+    #    ⚠️ 3 個大寫字母（ISO 4217）—— 太長／有古怪字元要擋。
+    currency: Optional[str] = Field(default=None, max_length=3)
 
 
 def _require_member(trip_id: str, user_id: str) -> dict:
@@ -1438,9 +1494,15 @@ def get_trip(trip_id: str, user: dict = Depends(current_user)) -> dict:
 def update_trip(trip_id: str, body: TripUpdate, user: dict = Depends(current_user)) -> dict:
     _require_member(trip_id, user["id"])
     fields, vals = [], []
-    for f in ("name", "destination", "start_date", "end_date", "days"):
+    for f in ("name", "destination", "start_date", "end_date", "days", "currency"):
         v = getattr(body, f)
         if v is not None:
+            if f == "currency":
+                v = str(v).strip().upper()
+                # ⚠️ 唔可以用 len != 3 就 raise —— 空字串 = 還原預設
+                if v and not v.isalpha():
+                    raise HTTPException(400, "貨幣代碼唔啱（要 3 個英文字母）")
+                v = v or "HKD"
             fields.append(f"{f} = ?"); vals.append(v)
     if fields:
         vals.append(trip_id)
@@ -2567,6 +2629,63 @@ def admin_test_mail(body: TestMailBody,
     r = send_test_email(to)
     # ⚠️ 唔 raise —— 要回傳失敗原因畀前端顯示
     return {"to": to, **r}
+
+
+@app.get("/api/currencies")
+def list_currencies() -> dict:
+    """
+    揀貨幣用嘅清單。
+
+    ⚠️ 回**常用**（排前面）+ **全部**（API 有嘅）。
+       唔可以淨係回常用 —— 去埃及、摩洛哥都要用到其他幣。
+    """
+    from wander import currency as cur
+    r = cur.get_rates("HKD", max_age=cur.TTL_SECONDS * 24)
+    rates = r.get("rates") or {}
+    common = [{"code": c, "label": cur.label(c), "symbol": cur.symbol(c)}
+              for c, _, _ in cur.COMMON]
+    allc = sorted(
+        [{"code": c, "label": cur.label(c), "symbol": cur.symbol(c)}
+         for c in rates.keys()],
+        key=lambda x: x["code"])
+    return {"common": common, "all": allc, "stale": bool(r.get("stale"))}
+
+
+@app.get("/api/rates")
+def get_rates(base: str = "HKD") -> dict:
+    """
+    匯率（⚠️ 有快取，唔係每次查 API）。
+
+    ⚠️⚠️ 用戶問：「呢個可唔可以實時整㗎？」
+       → 唔係「每次 request 查一次」，係**快取 6 個鐘**。
+         為咩：匯率一日只變幾次；狂查會被免費 API 封；
+         而且飛機／地鐵冇網嗰陣一定要有最後一次嘅 rate。
+
+    ⚠️ `stale: true` = 個 rate 過期但 API 攞唔到 → 用舊嘅頂住。
+       前端應該顯示「匯率可能舊咗」而唔係當佢準。
+    """
+    from wander import currency as cur
+    r = cur.get_rates(base)
+    return {
+        "base": r.get("base"),
+        "rates": r.get("rates") or {},
+        "at": r.get("at"),
+        "age_seconds": r.get("age"),
+        "stale": bool(r.get("stale")),
+        "source": r.get("source"),
+        "ttl_hours": cur.TTL_SECONDS // 3600,
+    }
+
+
+@app.get("/api/convert")
+def api_convert(amount: float, from_: str = Query("HKD", alias="from"),
+                to: str = "HKD") -> dict:
+    """換錢（單次）。⚠️ 前端通常用 `/api/rates` 自己計，唔使逐個查。"""
+    from wander import currency as cur
+    v = cur.convert(amount, from_, to)
+    return {"amount": amount, "from": (from_ or "").upper(),
+            "to": (to or "").upper(), "result": v,
+            "ok": v is not None}
 
 
 @app.get("/api/admin/me")

@@ -197,6 +197,10 @@ export const api = {
   zones: (id, days) => req('GET', `/api/trips/${id}/zones`, { params: days ? { days } : {} }),
   listShopping: (id) => req('GET', `/api/trips/${id}/shopping`),
   addShopping: (id, body) => req('POST', `/api/trips/${id}/shopping`, { body }),
+  /** ⚠️ 匯率（有快取 6 個鐘，唔係每次查 API） */
+  rates: (base = 'HKD') => req('GET', '/api/rates', { params: { base } }),
+  /** 揀貨幣用嘅清單（常用 + 全部） */
+  currencies: () => req('GET', '/api/currencies'),
   updateShopping: (sid, body) => req('PATCH', `/api/shopping/${sid}`, { body }),
   deleteShopping: (sid) => req('DELETE', `/api/shopping/${sid}`),
   clearDoneShopping: (id) => req('POST', `/api/trips/${id}/shopping/clear-done`),

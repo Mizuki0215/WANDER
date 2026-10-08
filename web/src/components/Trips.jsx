@@ -5,11 +5,42 @@ import { toast, Empty, Spinner } from '../lib/ui'
 import { STOP_COLORS } from '../lib/stops'
 import { daysBetween, tripLength, countdownText, dateRangeText, addDays, toISO, parseDate } from '../lib/dates'
 
+/**
+ * 貨幣揀選（旅程記帳貨幣）。
+ *
+ * ⚠️ 用原生 `<select>` —— 手機原生 picker 好好用
+ *    （唔使自己處理 scroll / 遮蓋 / 鍵盤）。
+ * ⚠️ 常用幣排 `optgroup` 前面，全部 340 個喺後面。
+ */
+function CurrencySelect({ value, onChange }) {
+  const [cur, setCur] = useState(null)
+  useEffect(() => { api.currencies().then(setCur).catch(() => {}) }, [])
+  const common = cur?.common || []
+  const all = cur?.all || []
+  const known = new Set(common.map(c => c.code))
+  const rest = all.filter(c => !known.has(c.code))
+  return (
+    <select className="input" value={value || 'HKD'}
+      onChange={e => onChange(e.target.value)}
+      style={{ flex: '0 0 auto', width: 118, fontWeight: 700 }}>
+      {common.map(c => (
+        <option key={c.code} value={c.code}>{c.symbol} {c.code} {c.label.split(' ').pop()}</option>
+      ))}
+      {rest.length > 0 && (
+        <optgroup label="全部">
+          {rest.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+        </optgroup>
+      )}
+      {!common.length && <option value="HKD">HK$ HKD</option>}
+    </select>
+  )
+}
+
 export default function Trips({ trips, onOpen, onRefresh, currentId = null,
                                 autoNew = false, onAutoNewDone }) {
   const [view, setView] = useState(null)       // null | 'new' | 'join' | 'edit'
   const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState({ name: '', destination: '', start_date: '', end_date: '' })
+  const [form, setForm] = useState({ name: '', destination: '', start_date: '', end_date: '', currency: 'HKD' })
   const [code, setCode] = useState('')
   // ⚠️⚠️ 用戶要求：
   //   「旅程嘅時候呢新增旅程嘅時候，咁其實係應該有一個 button
@@ -34,7 +65,7 @@ export default function Trips({ trips, onOpen, onRefresh, currentId = null,
 
   function reset() {
     setView(null); setEditing(null); setCode('')
-    setForm({ name: '', destination: '', start_date: '', end_date: '' })
+    setForm({ name: '', destination: '', start_date: '', end_date: '', currency: 'HKD' })
     setCities([]); setNewCity('')
   }
 
@@ -70,6 +101,7 @@ export default function Trips({ trips, onOpen, onRefresh, currentId = null,
     setEditing(t)
     setForm({
       name: t.name || '', destination: t.destination || '',
+      currency: t.currency || 'HKD',
       start_date: t.start_date || '', end_date: t.end_date || '',
     })
     setView('edit')
@@ -114,6 +146,8 @@ export default function Trips({ trips, onOpen, onRefresh, currentId = null,
         // ⚠️ 有城市清單就用清單嘅總日數做旅程長度，
         //    唔係嘅話會出現「4 日行程但城市加埋 6 日」。
         days: stops.length ? stops.reduce((a, b) => a + b.days, 0) : (days || 3),
+        // ⚠️⚠️ 記帳貨幣 —— 用戶要求：「根據匯率去轉返嗰個你想要嘅錢」
+        currency: (form.currency || 'HKD').toUpperCase(),
       }
       if (view === 'edit' && editing) {
         await api.updateTrip(editing.id, payload)
@@ -175,6 +209,21 @@ export default function Trips({ trips, onOpen, onRefresh, currentId = null,
           </div>
           <input className="input" placeholder="旅程名（例：福岡 2027）" value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+
+          {/* ⚠️⚠️ 記帳貨幣 —— 用戶要求：
+                「有時你去旅行如果唔係都係用港幣㗎嘛…」
+                ⚠️ 呢個係**旅程嘅結算貨幣**（總額用呢個顯示）。
+                   個別購物項目可以自己揀貨幣（購物清單入面）。 */}
+          <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <span className="sub" style={{ fontSize: 11.5, flex: '0 0 auto' }}>
+              💱 記帳貨幣
+            </span>
+            <CurrencySelect value={form.currency}
+              onChange={v => setForm(f => ({ ...f, currency: v }))} />
+            <span className="sub" style={{ fontSize: 10, flex: 1 }}>
+              總額用呢個顯示（個別項目可以自己揀）
+            </span>
+          </div>
           {/* ⚠️⚠️ 「目的地」欄已經**刪走**。
                  用戶原話：
                    「加入去城市嗰度其實取消咗有個叫做目的地嗰個，

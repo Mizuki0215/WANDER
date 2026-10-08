@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS trips (
     days        INTEGER NOT NULL DEFAULT 3,
     invite_code TEXT UNIQUE NOT NULL,
     owner_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    -- ⚠️ 旅程嘅「記帳貨幣」—— 總額用呢個顯示（預設 HKD）
+    currency    TEXT DEFAULT 'HKD',
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -157,6 +159,9 @@ CREATE TABLE IF NOT EXISTS shopping_items (
     assignee   TEXT NOT NULL DEFAULT '',      -- 邊個負責買
     price      REAL,                          -- 單價（可選）
     image      TEXT,                          -- 相片路徑（可選）
+    -- ⚠️ 呢項嘅貨幣（JPY / KRW / EUR / HKD…）
+    --    NULL = 用旅程嘅記帳貨幣
+    currency   TEXT,
     done       INTEGER NOT NULL DEFAULT 0,
     position   INTEGER NOT NULL DEFAULT 0,
     created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
@@ -230,6 +235,13 @@ MIGRATIONS: list[tuple[str, str, str]] = [
     ("users", "username", "TEXT"),
     ("users", "onboarded", "INTEGER"),
     ("shopping_items", "image", "TEXT"),
+    # ⚠️⚠️ 用戶要求：
+    #   「有時你去旅行如果唔係都係用港幣㗎嘛，所以你要 mark 低返
+    #    嗰個嘅價錢係有得揀嗰個 Yen or KRW or EUR、HKD 定係點樣？」
+    #   → 每項購物可以係**唔同貨幣**（去日本買嘢用 JPY）
+    ("shopping_items", "currency", "TEXT"),
+    # ⚠️ 旅程嘅「記帳貨幣」—— 總額用呢個顯示（通常 HKD）
+    ("trips", "currency", "TEXT"),
     ("items", "day_index", "INTEGER"),
 ]
 
