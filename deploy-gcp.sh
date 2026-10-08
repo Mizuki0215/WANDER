@@ -243,6 +243,21 @@ RestartSec=3
 WantedBy=multi-user.target
 SVCEOF
 
+# ── ⚠️⚠️ .env（gitignored，所以 VM 上冇）──
+#    實測：冇呢個檔 → 用咗預設 `invite` 模式 + 冇 admin
+#    （用戶登入到但見唔到後台、朋友註冊唔到）
+cat > /opt/wander/server/.env <<ENVEOF
+# ⚠️ 由 deploy-gcp.sh 自動產生
+# ⚠️ 想改就喺 VM 直接改呢個檔，跟住 systemctl restart wander
+WANDER_DB=/var/lib/wander/wander.db
+WANDER_UPLOAD_DIR=/var/lib/wander/uploads
+WANDER_BASE_URL=__BASEURL__
+# ⚠️ 開發版後台權限（你自己）
+WANDER_ADMIN_EMAILS=__ADMIN__
+# ⚠️ open = 朋友可以直接註冊；invite = 要邀請碼
+WANDER_SIGNUP_MODE=__MODE__
+ENVEOF
+
 systemctl daemon-reload
 systemctl enable --now wander
 
@@ -260,7 +275,21 @@ echo "=== 完成 $(date) ==="
 VMEOF
 
 # ⚠️ 替換 placeholder（heredoc quoted 所以唔會自動展開）
-sed -i "s|__REPO__|${REPO}|g; s|__HOST__|${HOST}|g" "$STARTUP"
+# ⚠️⚠️ 問用戶 admin email + 註冊模式（有默認）
+ADMIN_EMAIL="${WANDER_ADMIN_EMAIL:-}"
+if [ -z "$ADMIN_EMAIL" ]; then
+  echo
+  echo "  ${B}你嘅 email（開發版後台權限）：${N}"
+  read -r ADMIN_EMAIL < /dev/tty || ADMIN_EMAIL=""
+fi
+[ -n "$ADMIN_EMAIL" ] || die "要 email（後台權限）"
+
+MODE="${WANDER_SIGNUP_MODE:-open}"
+BASEURL="https://${HOST}"
+
+sed -i "s|__REPO__|${REPO}|g; s|__HOST__|${HOST}|g; \
+        s|__ADMIN__|${ADMIN_EMAIL}|g; s|__MODE__|${MODE}|g; \
+        s|__BASEURL__|${BASEURL}|g" "$STARTUP"
 
 # ── ⑦ 建 VM ────────────────────────────────────────────────────
 say "建 VM（第一次要 3–5 分鐘）…"

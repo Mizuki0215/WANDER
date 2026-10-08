@@ -322,3 +322,73 @@ class TestShellSafety:
         i_budget = s.index("billing budgets create")
         for step in ["gcloud services enable", "gcloud compute addresses create"]:
             assert i_budget < s.index(step), f"budget alert 喺 {step} 之後"
+
+
+class TestEnvFile:
+    """
+    ⚠️⚠️ `server/.env` 係 gitignored（正確）——
+       所以 VM 上**冇**呢個檔。
+
+    ⚠️ 實測：冇 .env → 用咗預設值 →
+       · `WANDER_SIGNUP_MODE` 預設 `invite` → 朋友註冊唔到
+       · `WANDER_ADMIN_EMAILS` 空 → 用戶見唔到開發版後台
+
+    ✅ Script 一定要喺 VM 入面**產生** .env。
+    """
+
+    def test_writes_env(self, s):
+        assert "/opt/wander/server/.env" in s, "冇寫 .env"
+
+    def test_env_has_admin(self, s):
+        """⚠️ 後台權限一定要設（唔係嘅話見唔到 Dashboard）。"""
+        assert "WANDER_ADMIN_EMAILS=" in s, "冇設 admin"
+
+    def test_env_has_signup_mode(self, s):
+        """
+        ⚠️ 一定要設 signup mode ——
+           預設係 `invite`，朋友註冊唔到。
+        """
+        assert "WANDER_SIGNUP_MODE=" in s, "冇設註冊模式"
+
+    def test_env_has_db_paths(self, s):
+        """⚠️ DB + uploads 一定要喺 /var/lib（唔係 repo 入面）。"""
+        i = s.index("cat > /opt/wander/server/.env")
+        # ⚠️ 要搵 "\nENVEOF"（連換行）——
+        #    淨係 "ENVEOF" 會 match 到同一行嘅 `<<ENVEOF`（實測中過）
+        j = s.index("\nENVEOF", i)
+        blk = s[i:j]
+        assert "WANDER_DB=/var/lib/wander" in blk, "DB 路徑唔啱"
+        assert "WANDER_UPLOAD_DIR=/var/lib/wander" in blk, "uploads 路徑唔啱"
+
+    def test_env_has_base_url(self, s):
+        """⚠️ BASE_URL 用嚟砌邀請連結 / QR。"""
+        assert "WANDER_BASE_URL=" in s, "冇設 BASE_URL"
+
+    def test_asks_admin_email(self, s):
+        """⚠️ 要問用戶 email（唔可以 hardcode）。"""
+        assert "WANDER_ADMIN_EMAIL" in s, "冇問 admin email"
+        assert "read -r ADMIN_EMAIL" in s, "冇讀輸入"
+
+    def test_all_placeholders_substituted(self, s):
+        """
+        ⚠️⚠️ 所有 `__XXX__` 都要喺 sed 度替換 ——
+           漏一個就會寫 literal `__ADMIN__` 落 .env。
+        """
+        import re
+        placeholders = set(re.findall(r"__[A-Z]+__", s))
+        i = s.index("sed -i")
+        sed_blk = s[i:i + 500]
+        for ph in placeholders:
+            assert ph in sed_blk, f"⚠️ {ph} 冇喺 sed 替換"
+
+    def test_real_substitution(self):
+        """⚠️ **實測**：模擬替換，確認冇 placeholder 剩。"""
+        import subprocess
+        r = subprocess.run(
+            ["sed",
+             "s|__REPO__|https://x/y.git|g; s|__HOST__|1.2.3.4.sslip.io|g;"
+             "s|__ADMIN__|a@b.com|g; s|__MODE__|open|g;"
+             "s|__BASEURL__|https://x|g", str(SH)],
+            capture_output=True, text=True)
+        for ph in ["__REPO__", "__HOST__", "__ADMIN__", "__MODE__", "__BASEURL__"]:
+            assert ph not in r.stdout, f"仲有 {ph}"

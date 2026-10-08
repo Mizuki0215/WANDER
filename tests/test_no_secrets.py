@@ -60,7 +60,7 @@ class TestNoSecretsTracked:
     def test_no_partial_tokens_in_comments(self):
         """
         ⚠️ 我曾經喺 comment 寫低用戶泄漏嘅 token **頭 7 個字**
-           （`ghp_AIt6z...`）—— repo 係 public，唔應該有。
+           （`ghp_` + 6 個字元）—— repo 係 public，唔應該有。
         """
         bad = []
         for f in _tracked_files():
