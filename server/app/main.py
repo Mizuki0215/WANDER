@@ -274,15 +274,20 @@ def add_shopping(trip_id: str, body: dict, user: dict = Depends(current_user)) -
         n = conn.execute("SELECT COUNT(*) c FROM shopping_items WHERE trip_id=?",
                          (trip_id,)).fetchone()["c"]
         sid = _new_id("shop")
+        # ⚠️⚠️ `image` 之前**冇寫入** —— 前端明明有送，
+        #    但後端 INSERT 漏咗個欄 → **相片無聲無息咁消失**。
+        #    （schema 有 `image` 欄，前端 `add()` 有送，就係呢度漏。）
         conn.execute(
             """INSERT INTO shopping_items
-               (id, trip_id, title, qty, note, category, assignee, price, position, created_by)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+               (id, trip_id, title, qty, note, category, assignee, price, position,
+                created_by, image)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             (sid, trip_id, title, (body.get("qty") or "").strip(),
              (body.get("note") or "").strip(),
              (body.get("category") or "other").strip(),
              (body.get("assignee") or "").strip(),
-             body.get("price"), n, user["id"]))
+             body.get("price"), n, user["id"],
+             (body.get("image") or "").strip() or None))
         row = conn.execute("SELECT * FROM shopping_items WHERE id=?", (sid,)).fetchone()
     return {"item": db.row_to_dict(row)}
 
@@ -301,6 +306,12 @@ def update_shopping(item_id: str, body: dict,
     for k in ("title", "qty", "note", "category", "assignee"):
         if k in body and body[k] is not None:
             fields.append(f"{k}=?"); vals.append(str(body[k]).strip())
+    # ⚠️ `image` 都要可以 patch —— 前端而家係
+    #    「先加 item（即刻有反應）→ 上傳完再補相」。
+    #    ⚠️ `None` = 移除相片（唔係「唔改」）——
+    #       所以用 `is not None or k == 'image'` 分開處理。
+    if "image" in body and body["image"] is not None:
+        fields.append("image=?"); vals.append(str(body["image"]).strip() or None)
     if "price" in body:
         fields.append("price=?"); vals.append(body["price"])
     if "done" in body:

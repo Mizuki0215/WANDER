@@ -15,7 +15,28 @@ export const auth = {
   clear() { this.token = null },
 }
 
-async function req(method, path, { body, params } = {}) {
+/**
+ * ⚠️⚠️ 請求逾時（毫秒）
+ *
+ *   用戶報嘅 bug：
+ *     「加唔到 item 入 shopping list」
+ *     截圖見到：購物清單填好晒（名 + 價錢 + 相），
+ *     撳「＋」→ **個掣變灰，郁都唔郁，清單仲係空嘅**。
+ *
+ *   ⚠️ 根因：`fetch` **冇 timeout**。
+ *      用戶揀咗相 → `api.upload()` 上傳 4MB base64 →
+ *      經 5G + cloudflared tunnel → **卡住** →
+ *      `busy` 永遠 `true` → 個掣永遠 disabled →
+ *      用戶以為「加唔到」，其實係**等緊一個永遠唔會完嘅請求**。
+ *
+ *   ✅ 修法：`AbortController` + timeout。
+ *      正常請求（本地／4G）幾百 ms 完成，30 秒好夠。
+ *      上傳相（base64 大 33%）畀多啲：60 秒。
+ */
+const TIMEOUT_MS = 30000
+const UPLOAD_TIMEOUT_MS = 60000
+
+async function req(method, path, { body, params, timeout = TIMEOUT_MS } = {}) {
   const url = new URL(path, window.location.origin)
   if (params) {
     Object.entries(params).forEach(([k, v]) => {
@@ -26,11 +47,32 @@ async function req(method, path, { body, params } = {}) {
   const hadToken = !!auth.token
   if (hadToken) headers.Authorization = `Bearer ${auth.token}`
 
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
+  // ⚠️ 一定要 `clearTimeout`（finally）—— 唔係嘅話每個請求都留一個 timer
+  const ctl = new AbortController()
+  const timer = setTimeout(() => ctl.abort(), timeout)
+
+  let res
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: ctl.signal,
+    })
+  } catch (e) {
+    // ⚠️ 分清「用戶自己取消」同「逾時」
+    if (e.name === 'AbortError') {
+      throw new Error(
+        timeout >= UPLOAD_TIMEOUT_MS
+          ? `上傳逾時（超過 ${timeout / 1000} 秒）—— 網絡太慢或者相太大，試下細啲嘅相`
+          : `連接逾時（超過 ${timeout / 1000} 秒）—— 檢查網絡`
+      )
+    }
+    throw new Error(e.message === 'Failed to fetch'
+      ? '連唔到伺服器 —— 檢查網絡' : e.message)
+  } finally {
+    clearTimeout(timer)
+  }
 
   // ⚠️⚠️ 401 唔一定係「session 過期」！
   //
@@ -160,7 +202,10 @@ export const api = {
   clearDoneShopping: (id) => req('POST', `/api/trips/${id}/shopping/clear-done`),
   nearby: (id, item, radius) => req('GET', `/api/trips/${id}/nearby`,
     { params: { item, ...(radius ? { radius } : {}) } }),
-  upload: (data) => req('POST', '/api/upload', { body: { data } }),
+  /** ⚠️ 上傳用 60 秒（base64 大 33%，手機網絡慢） */
+  upload: (data) => req('POST', '/api/upload', {
+    body: { data }, timeout: UPLOAD_TIMEOUT_MS,
+  }),
   setPassword: (password, current) => req('POST', '/api/me/password', { body: { password, current } }),
   listExpenses: (id) => req('GET', `/api/trips/${id}/expenses`),
   addExpense: (id, body) => req('POST', `/api/trips/${id}/expenses`, { body }),

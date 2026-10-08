@@ -78,27 +78,65 @@ export default function ShoppingList({ trip, members, onRefresh }) {
     finally { setNearBusy(false) }
   }
 
+  /**
+   * 加入一項購物。
+   *
+   * ⚠️⚠️ 用戶報嘅 bug：
+   *   「加唔到 item 入 shopping list」——
+   *   截圖見到清單填好晒，撳「＋」個掣變灰，清單仲係空。
+   *
+   *   ⚠️ 根因有兩個：
+   *     ① `fetch` 冇 timeout → 上傳相卡住 → `busy` 永遠 true
+   *        → 個掣永遠 disabled（已喺 api.js 加 AbortController）
+   *     ② 呢個 function **等相上傳完先加 item** ——
+   *        4MB 相經 5G + tunnel 要成分鐘，
+   *        用戶以為壞咗，其實只係等緊。
+   *
+   *   ✅ 新流程：**先加 item（即刻見到）→ 之後再補相**。
+   *      · 個 item 1 秒內出現，用戶即刻有反應
+   *      · 相上傳成功 → patch 返個 item
+   *      · 相上傳失敗 → item 照樣喺度（只係冇相），
+   *        而且**明確講**點解（唔係靜靜咁冇咗）
+   */
   async function add() {
     const t = text.trim()
     if (!t) return
     setBusy(true)
+    const hadPhoto = !!photo?.data
+
+    // ① 先加 item —— 唔等相
+    let item = null
     try {
-      let image = null
-      if (photo?.data) {
-        setUploading(true)
-        try { image = (await api.upload(photo.data)).url }
-        catch (e) { toast(`相片上傳失敗：${e.message}`) }
-        finally { setUploading(false) }
-      }
-      await api.addShopping(trip.id, {
+      const r = await api.addShopping(trip.id, {
         title: t, qty: qty.trim(), category: cat,
         price: price === '' ? null : Number(price),
-        assignee: assignee.trim(), image,
+        assignee: assignee.trim(),
       })
+      item = r?.item || null
       setText(''); setQty(''); setPrice(''); setPhoto(null); setNear(null)
       await load(); onRefresh?.()
-    } catch (e) { toast(e.message) }
-    finally { setBusy(false) }
+    } catch (e) {
+      toast(e.message)
+      setBusy(false)
+      return              // ⚠️ item 都加唔到就唔好上傳相
+    } finally {
+      // ⚠️ 掣要即刻解鎖 —— 唔可以等上傳
+      setBusy(false)
+    }
+
+    // ② 補相（背景進行，唔阻住用戶）
+    if (hadPhoto && item?.id) {
+      setUploading(true)
+      try {
+        const { url } = await api.upload(photo?.data || '')
+        await api.updateShopping(item.id, { image: url })
+        await load()
+      } catch (e) {
+        // ⚠️ 要用「item 已經加咗，只係相冇」呢個講法 ——
+        //    唔係嘅話用戶會以為成項都冇加到
+        toast(`「${t}」加咗，但相片上傳失敗：${e.message}`)
+      } finally { setUploading(false) }
+    }
   }
 
   async function toggle(it) {
@@ -140,8 +178,17 @@ export default function ShoppingList({ trip, members, onRefresh }) {
           <input className="input" value={qty} placeholder="數量"
             onChange={e => setQty(e.target.value)}
             style={{ width: 'clamp(52px, 15vw, 70px)', flex: '0 0 auto' }} />
-          <button className="btn primary" onClick={() => text.includes('\n') ? quickAdd(text) : add()}
-            disabled={busy || !text.trim()}>＋</button>
+          {/* ⚠️ 掣嘅狀態要清楚：
+                 · busy    → 「…」（請求進行中）
+                 · text 空 → disabled（冇嘢加）
+                 ⚠️ 上傳相**唔會**令呢個掣 disabled ——
+                    因為 item 已經加咗（見 `add()`）。 */}
+          <button className="btn primary"
+            onClick={() => text.includes('\n') ? quickAdd(text) : add()}
+            disabled={busy || !text.trim()}
+            title={busy ? '加緊…' : '加入'}>
+            {busy ? '…' : '＋'}
+          </button>
         </div>
 
         <div className="chips" style={{ marginTop: 9 }}>

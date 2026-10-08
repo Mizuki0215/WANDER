@@ -78,6 +78,91 @@ export default function App() {
   const [stops, setStops] = useState([])
   const [tab, setTab] = useState('home')
   const [booted, setBooted] = useState(false)
+  /**
+   * ⚠️⚠️ 底部導航嘅**真實高度** → 寫入 `--nav-h`。
+   *
+   *   用戶報：「UI scroll 有啲怪」+ 截圖見到
+   *   **最底嘅「未排入行程」托盤被導航切走**。
+   *
+   *   ⚠️ 根因：CSS 寫死 `--nav-h: 62px`，但實際高度喺手機上會變：
+   *      · 「HOME」+「主畫面」兩個 span → **兩行**（截圖證實）
+   *      · 用戶調大系統字體（iOS 動態字體）
+   *      · 窄機（320px）label 換行
+   *      · 瀏海機嘅 safe-area
+   *     → 實際 ~80px 但 padding 只留 62px → 內容被切。
+   *
+   *   ✅ 修法：`ResizeObserver` 量度真實高度。
+   *      ⚠️ 唔可以「改成 80px」—— 另一部機會再錯。
+   *
+   *   ⚠️⚠️ 為咩用**回呼 ref** 而唔係 `useRef` + `useEffect`：
+   *
+   *      呢個 component 有**條件 return**（`if (booting)` / `if (!user)`）。
+   *      React 規則：**所有 hook 都要喺條件 return 之前**。
+   *      但 `isHome`（決定有冇 nav）喺條件 return **之後**才定義 ——
+   *      擺前面會爆 `Cannot access 'isHome' before initialization`，
+   *      擺後面會爆 `Rendered more hooks than during the previous render`。
+   *
+   *      ✅ 回呼 ref 完全唔使 hook —— React 喺**掛載／卸載**時叫佢，
+   *         冇次序問題，而且天然處理「nav 出現／消失」。
+   *
+   *   ⚠️ React 18 嘅回呼 ref **唔支援 return cleanup**（React 19 才有），
+   *      所以 cleanup 自己存喺 `navCleanup`。
+   */
+  const navCleanup = useRef(null)
+
+  const navRef = useCallback((el) => {
+    const root = document.documentElement
+
+    // ① 先清走上一次（nav 卸載，或者重新掛載）
+    if (navCleanup.current) {
+      try { navCleanup.current() } catch {}
+      navCleanup.current = null
+    }
+
+    // ② 冇 nav（主畫面）→ --nav-h = 0
+    //    ⚠️ 唔清走嘅話會留一段空白（原本 62px 嘅 padding）
+    if (!el) {
+      root.style.setProperty('--nav-h', '0px')
+      return
+    }
+
+    const apply = () => {
+      const h = el.getBoundingClientRect().height
+      if (h > 0) root.style.setProperty('--nav-h', `${Math.round(h)}px`)
+    }
+    apply()
+
+    // ⚠️ 一定要 observe —— 字體載入、label 換行、轉向都會改高度
+    //
+    //   ⚠️⚠️ 但一定要**檢查存在**：
+    //      · Safari < 13.1 冇 `ResizeObserver`
+    //      · jsdom（測試環境）都冇
+    //      冇檢查就會爆 `ReferenceError` → **成個 app 白畫面**。
+    //      （實測：dom.test.mjs 即刻爆咗。）
+    const onOrient = () => apply()
+
+    if (typeof ResizeObserver === 'undefined') {
+      // ⚠️ 退化：只聽 resize / orientationchange
+      window.addEventListener('resize', apply)
+      window.addEventListener('orientationchange', onOrient)
+      navCleanup.current = () => {
+        window.removeEventListener('resize', apply)
+        window.removeEventListener('orientationchange', onOrient)
+        root.style.removeProperty('--nav-h')
+      }
+      return
+    }
+
+    const ro = new ResizeObserver(apply)
+    ro.observe(el)
+    window.addEventListener('orientationchange', onOrient)
+
+    navCleanup.current = () => {
+      ro.disconnect()
+      window.removeEventListener('orientationchange', onOrient)
+      root.style.removeProperty('--nav-h')
+    }
+  }, [])
   const [shopBadge, setShopBadge] = useState(0)
   const [friendBadge, setFriendBadge] = useState(0)
   const [friendToken, setFriendToken] = useState(null)
@@ -617,7 +702,7 @@ export default function App() {
           onClose={() => setDetail(null)} onRefresh={() => refreshTrip()} />
       )}
 
-      {!isHome && <nav className="nav">
+      {!isHome && <nav className="nav" ref={navRef}>
         {TABS.map(([k, icon, label]) => (
           <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
             <span className="i"><PixelIcon name={icon} size={20} /></span>
