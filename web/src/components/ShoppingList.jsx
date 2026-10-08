@@ -84,6 +84,16 @@ export default function ShoppingList({ trip, members, onRefresh , onToggleVis })
   const [cur, setCur] = useState('')          // ⚠️ 空 = 用旅程貨幣
   const [assignee, setAssignee] = useState('')
   const [busy, setBusy] = useState(false)
+  /**
+   * ⚠️⚠️ 加嘅時候就要揀 public／private（用戶要求）
+   *    「當我哋去加 shopping list 嘅時候…
+   *      我覺得要順便就係你要有個 button 就係可以
+   *      set 做 public 定係 private 囉」
+   *
+   *    ⚠️ 預設 `private`（只有自己見到）——
+   *       唔會唔小心公開。
+   */
+  const [vis, setVis] = useState('private')
   const [detail, setDetail] = useState(null)
   const [view, setView] = useState(null)      // 全圖檢視
   const [showDone, setShowDone] = useState(true)
@@ -166,8 +176,11 @@ export default function ShoppingList({ trip, members, onRefresh , onToggleVis })
         assignee: assignee.trim(),
         // ⚠️ 空字串 = 用旅程嘅記帳貨幣（後端會處理）
         currency: cur || null,
+        // ⚠️⚠️ 加嘅時候就決定可見度（用戶要求）
+        visibility: vis,
       })
       item = r?.item || null
+      // ⚠️ 唔重設 vis —— 用戶可能連續加幾樣同一可見度
       setText(''); setQty(''); setPrice(''); setPhoto(null); setNear(null); setCur('')
       await load(); onRefresh?.()
     } catch (e) {
@@ -209,7 +222,7 @@ export default function ShoppingList({ trip, members, onRefresh , onToggleVis })
     setBusy(true)
     try {
       for (const l of lines) {
-        await api.addShopping(trip.id, { title: l.replace(/^[-•*\d.]+\s*/, ''), category: cat })
+        await api.addShopping(trip.id, { title: l.replace(/^[-•*\d.]+\s*/, ''), category: cat, visibility: vis })
       }
       setText(''); await load(); toast(`加入咗 ${lines.length} 項 ✓`)
     } catch (e) { toast(e.message) }
@@ -244,6 +257,29 @@ export default function ShoppingList({ trip, members, onRefresh , onToggleVis })
             title={busy ? '加緊…' : '加入'}>
             {busy ? '…' : '＋'}
           </button>
+        </div>
+
+        {/* ⚠️⚠️ 可見度（用戶要求）——
+               「加嘅時候順便有個 button set public 定 private」
+            ⚠️ 兩個掣而唔係一個 toggle —— 一眼睇到而家係邊個 */}
+        <div className="chips" style={{ marginTop: 9 }}>
+          <button className={`chip ${vis === 'private' ? 'on' : ''}`}
+            style={{ fontSize: 10.5 }}
+            onClick={() => setVis('private')}
+            title="只有你見到">
+            🔒 私人
+          </button>
+          <button className={`chip ${vis === 'group' ? 'on' : ''}`}
+            style={{ fontSize: 10.5 }}
+            onClick={() => setVis('group')}
+            title="全組都見到">
+            👥 共用
+          </button>
+          <span className="sub" style={{ fontSize: 10, alignSelf: 'center', marginLeft: 4 }}>
+            {vis === 'private'
+              ? '只有你見到（朋友睇唔到）'
+              : '全組都見到'}
+          </span>
         </div>
 
         <div className="chips" style={{ marginTop: 9 }}>

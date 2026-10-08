@@ -18,6 +18,14 @@ export default function Discover({ tripId, items, onRefresh, onOpenMap, onEditIt
   const [text, setText] = useState('')
   const [mode, setMode] = useState('link')       // link | text
   const [busy, setBusy] = useState(false)
+  /**
+   * ⚠️⚠️ 加嘅時候就要揀 public／private（用戶要求）
+   *    「景點 list 都要」
+   *
+   *    ⚠️ 預設 `private`（只有自己見到）——
+   *       唔會唔小心公開。
+   */
+  const [vis, setVis] = useState('private')
   const [steps, setSteps] = useState([])
   const [needCaption, setNeedCaption] = useState(null)   // {url, reason}
   const [cat, setCat] = useState('all')
@@ -59,12 +67,39 @@ export default function Discover({ tripId, items, onRefresh, onOpenMap, onEditIt
    *   ⚠️ 後端會回 `duplicate: true`（同一個地方已經喺收藏度）——
    *      呢個**唔係**錯誤，要分開講。
    */
+  /**
+   * ⚠️⚠️ 可見度掣（用戶要求）
+   *    「加嘅時候順便有個 button set public 定 private」
+   *
+   *    ⚠️ 用**兩個掣**而唔係 toggle —— 一眼睇到而家係邊個。
+   */
+  function VisPicker() {
+    return (
+      <div className="chips" style={{ marginTop: 9 }}>
+        <button className={`chip ${vis === 'private' ? 'on' : ''}`}
+          style={{ fontSize: 10.5 }} onClick={() => setVis('private')}
+          title="只有你見到">
+          🔒 私人
+        </button>
+        <button className={`chip ${vis === 'public' ? 'on' : ''}`}
+          style={{ fontSize: 10.5 }} onClick={() => setVis('public')}
+          title="全 group 都見到">
+          🌍 公開
+        </button>
+        <span className="sub" style={{ fontSize: 10, alignSelf: 'center', marginLeft: 4 }}>
+          {vis === 'private' ? '只有你見到' : '全 group 都見到'}
+        </span>
+      </div>
+    )
+  }
+
   async function saveAll(found) {
     let added = 0, dup = 0
     const errs = []
     for (const it of found) {
       try {
-        const r = await api.addItem(tripId, it)
+        // ⚠️⚠️ 加嘅時候就決定可見度（用戶要求）
+        const r = await api.addItem(tripId, { ...it, visibility: vis })
         if (r?.duplicate) dup++
         else added++
       } catch (e) {
@@ -181,6 +216,16 @@ export default function Discover({ tripId, items, onRefresh, onOpenMap, onEditIt
         <button className={`chip ${mode === 'text' ? 'on' : ''}`} onClick={() => setMode('text')}>📝 貼文字</button>
       </div>
 
+      {/* ⚠️⚠️ 可見度（用戶要求）——
+             「加嘅時候順便要有個 button set public 定 private」
+             「景點 list 都要」
+
+          ⚠️⚠️ 一定要放喺**解析掣之前**（即係輸入框**上面**）——
+             因為 `runParse()` 解析完會**自動存入**（`saveAll`），
+             唔係只得預覽。用戶如果解析完先揀就太遲。
+          （實測：我第一版放喺解析掣之後 → 用戶根本冇機會揀。） */}
+      <VisPicker />
+
       {mode === 'link' ? (
         <div className="row" style={{ gap: 7 }}>
           <input className="input mono" placeholder="https://maps.app.goo.gl/… 或 IG link"
@@ -212,6 +257,11 @@ export default function Discover({ tripId, items, onRefresh, onOpenMap, onEditIt
         />
       )}
 
+      {/* ⚠️⚠️ 可見度（用戶要求）——
+             「加嘅時候順便要有個 button set public 定 private」
+             「景點 list 都要」
+          ⚠️ 放喺**解析掣之前** —— 因為解析完會**自動存入**，
+             所以一定要解析之前揀好。 */}
       {steps.length > 0 && !needCaption && (
         <div className="card" style={{ marginTop: 12, borderColor: 'var(--cyan)' }}>
           <div className="steps">

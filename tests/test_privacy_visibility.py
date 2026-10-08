@@ -726,3 +726,109 @@ class TestClarityCurve:
         body = "\n".join(l.split("//")[0] for l in body.split("\n"))
         assert "100 - clarityVal" not in body, "仲有線性映射"
         assert "clarityToDim(" in body, "冇用曲線 helper"
+
+
+class TestVisibilityPickerOnAdd:
+    """
+    ⚠️⚠️ 用戶要求（第三次補充）：
+       「我想 +1 樣嘢呢就係當我哋去加 shopping list 嘅時候啦，
+        咁我哋要加咁嗰個 item 落去個 list 度嘅時候，
+        我覺得要順便就係你要有個 button 就係可以 set 做
+         public 定係 private 囉。景點 list 都要。」
+
+    ⚠️ 即係：**加嘅時候**就要揀，唔係加完再去改。
+
+    ⚠️ 為咩重要：
+       · 加完再改 → 用戶可能唔記得改 → 私人嘢變公開
+       · 加嗰陣揀 → 意圖清楚，唔會唔小心
+    """
+
+    def test_shopping_has_vis_state(self):
+        s = (WEB / "components" / "ShoppingList.jsx").read_text(encoding="utf-8")
+        assert "const [vis, setVis]" in s, "購物冇 vis state"
+        assert "useState('private')" in s, "預設唔係 private"
+
+    def test_shopping_passes_vis_on_add(self):
+        """⚠️⚠️ 加嘅時候一定要傳落 API。"""
+        s = (WEB / "components" / "ShoppingList.jsx").read_text(encoding="utf-8")
+        i = s.index("await api.addShopping(")
+        blk = s[i:i + 400]
+        assert "visibility: vis" in blk, "加嘅時候冇傳 visibility"
+
+    def test_shopping_quickadd_also_passes(self):
+        """⚠️ 批量加（貼一整份清單）都要傳。"""
+        # ⚠️ 唔可以用 `[^)]*` —— 會喺 `qty.trim()` 個 `)` 就停
+        #    （實測：假失敗）。要搵到 `})` 為止。
+        import re
+        s = (WEB / "components" / "ShoppingList.jsx").read_text(encoding="utf-8")
+        calls = re.findall(r"api\.addShopping\(.*?\}\)", s, re.S)
+        assert calls, "搵唔到 addShopping 呼叫"
+        for c in calls:
+            assert "visibility: vis" in c, f"有 addShopping 冇傳 visibility:\n{c[:120]}"
+
+    def test_shopping_has_two_buttons(self):
+        """
+        ⚠️ 用**兩個掣**而唔係一個 toggle ——
+           一眼睇到而家係邊個（toggle 要諗）。
+        """
+        s = (WEB / "components" / "ShoppingList.jsx").read_text(encoding="utf-8")
+        assert "🔒 私人" in s, "冇私人掣"
+        assert "👥 共用" in s, "冇共用掣"
+        assert "setVis('private')" in s, "私人掣冇 onClick"
+        assert "setVis('group')" in s, "共用掣冇 onClick"
+
+    def test_shopping_explains(self):
+        """⚠️ 要講清楚分別（唔係淨係 icon）。"""
+        s = (WEB / "components" / "ShoppingList.jsx").read_text(encoding="utf-8")
+        assert "只有你見到" in s, "冇解釋「私人」"
+
+    def test_items_has_vis_state(self):
+        s = (WEB / "components" / "Discover.jsx").read_text(encoding="utf-8")
+        assert "const [vis, setVis]" in s, "景點冇 vis state"
+
+    def test_items_passes_vis_on_add(self):
+        s = (WEB / "components" / "Discover.jsx").read_text(encoding="utf-8")
+        i = s.index("api.addItem(")
+        blk = s[i:i + 300]
+        assert "visibility: vis" in blk, "加景點冇傳 visibility"
+
+    def test_items_has_two_buttons(self):
+        s = (WEB / "components" / "Discover.jsx").read_text(encoding="utf-8")
+        assert "🔒 私人" in s, "冇私人掣"
+        assert "🌍 公開" in s, "冇公開掣"
+
+    def test_items_picker_before_parse(self):
+        """
+        ⚠️⚠️ 一定要喺**解析掣之前** ——
+           因為解析完會**自動存入**（`saveAll`），
+           所以用戶一定要解析之前揀好。
+        """
+        s = (WEB / "components" / "Discover.jsx").read_text(encoding="utf-8")
+        i_picker = s.index("<VisPicker />")
+        i_parse = s.index("onClick={runParse}")
+        assert i_picker < i_parse, "可見度掣喺解析掣之後（太遲）"
+
+    def test_items_picker_not_inside_steps(self):
+        """
+        ⚠️ 唔可以喺 `steps` card 入面 ——
+           嗰個 block 只有解析完先出（`steps.length > 0`），
+           即係用戶**未揀就自動加咗**。
+        """
+        s = (WEB / "components/Discover.jsx".replace("/", "/")).read_text(encoding="utf-8")
+        i = s.index("<VisPicker />")
+        # ⚠️ 向前搵最近嘅 gate
+        before = s[:i]
+        gate = before.rfind("steps.length > 0")
+        div = before.rfind("steps.map")
+        # ⚠️ 如果最近嘅 gate 係 steps，就係錯位
+        assert gate == -1 or before.rfind("<VisPicker") > gate or \
+            s[gate:i].count(")}") > 0, "VisPicker 喺 steps card 入面"
+
+    def test_both_default_private(self):
+        """
+        ⚠️⚠️ 兩個都要預設 `private` ——
+           唔會唔小心公開。
+        """
+        for f in ["ShoppingList.jsx", "Discover.jsx"]:
+            s = (WEB / "components" / f).read_text(encoding="utf-8")
+            assert "useState('private')" in s, f"{f} 預設唔係 private"
